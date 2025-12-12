@@ -2,7 +2,7 @@
 <html lang="ko">
 <head>
     <meta charset="UTF-8">
-    <title>Joker Game (Full Deck)</title>
+    <title>Old Maid Online</title>
     <script src="/socket.io/socket.io.js"></script>
     <style>
         body { background-color: #2c3e50; color: white; font-family: 'Arial', sans-serif; text-align: center; margin: 0; overflow: hidden; user-select: none; }
@@ -23,53 +23,54 @@
         #p-top   { top: 40px; left: 50%; transform: translateX(-50%); } 
         #p-prev  { left: 30px; top: 50%; transform: translateY(-50%); } 
 
-        .cards-row { display: flex; justify-content: center; gap: -20px; flex-wrap: nowrap; height: 100px; margin-top: 10px; }
+        .cards-row { display: flex; justify-content: center; height: 100px; margin-top: 10px; }
         
-        /* 카드 스타일 */
+        /* 카드 스타일 (겹치기 효과) */
         .card { 
             width: 60px; height: 90px; background: white; border-radius: 6px; 
             display: flex; justify-content: center; align-items: center; font-weight: bold; font-size: 24px;
             box-shadow: 2px 2px 6px rgba(0,0,0,0.4); border: 1px solid #ccc; position: relative; 
-            margin-left: -30px; /* 겹치기 효과 */
-            transition: transform 0.2s, margin 0.2s;
+            margin-left: -35px; /* 카드를 겹치게 */
+            transition: 0.3s;
         }
-        .card:hover { transform: translateY(-15px); z-index: 10; margin-right: 30px; }
+        .card:first-child { margin-left: 0; }
+        .card:hover { transform: translateY(-20px); z-index: 100; margin-right: 35px; } /* 호버 시 펼쳐짐 */
         
-        /* 무늬 색상 */
+        /* 색상 */
         .card.red { color: #c0392b; }
         .card.black { color: #2c3e50; }
-        .card.joker { color: #8e44ad; border: 2px solid #8e44ad; box-shadow: 0 0 10px #8e44ad; }
+        .card.joker { color: #8e44ad; border: 2px solid #8e44ad; }
         
-        /* 카드 뒷면 */
+        /* 뒷면 패턴 */
         .card.back { 
             background: repeating-linear-gradient(45deg, #2980b9, #2980b9 10px, #3498db 10px, #3498db 20px); 
-            color: transparent; border: 2px solid white;
+            color: transparent; border: 2px solid white; cursor: default;
         }
         
-        /* 버려지는 애니메이션 */
-        .discard-anim { animation: discardEffect 0.8s forwards; z-index: 100; }
-        @keyframes discardEffect {
-            0% { transform: scale(1) translateY(0); opacity: 1; }
-            50% { transform: scale(1.5) translateY(-50px); opacity: 0.8; }
-            100% { transform: scale(0.5) translateY(-100px); opacity: 0; }
-        }
-
         /* 턴 & 타겟 */
         .turn-active { border: 3px solid #f1c40f; box-shadow: 0 0 20px #f1c40f; background: rgba(0,0,0,0.3); }
         .target-active .card.back { cursor: pointer; border: 2px solid #f1c40f; animation: pulse 0.8s infinite alternate; }
         @keyframes pulse { from { transform: translateY(0); } to { transform: translateY(-8px); } }
 
+        /* 버려지는 애니메이션 (확대 후 투명) */
+        .discard-anim { animation: discardEffect 0.8s forwards; position: relative; z-index: 200; }
+        @keyframes discardEffect {
+            0% { transform: scale(1); opacity: 1; background: #fff; }
+            50% { transform: scale(1.5); opacity: 0.8; background: #ffcccc; box-shadow: 0 0 20px red; }
+            100% { transform: scale(2); opacity: 0; }
+        }
+
         .nickname { font-size: 20px; font-weight: bold; text-shadow: 1px 1px 2px black; }
         .msg-box { position: absolute; top: 45%; left: 50%; transform: translate(-50%, -50%); background: rgba(0,0,0,0.8); padding: 15px 30px; border-radius: 30px; pointer-events: none; z-index: 50; font-size: 22px; }
 
-        /* 연출 오버레이 */
+        /* 뽑기 연출 모달 */
         #draw-overlay {
             position: fixed; top: 0; left: 0; width: 100%; height: 100%;
-            background: rgba(0,0,0,0.85); z-index: 200; display: none;
+            background: rgba(0,0,0,0.85); z-index: 500; display: none;
             flex-direction: column; justify-content: center; align-items: center; cursor: pointer;
         }
         #drawn-card-display {
-            width: 180px; height: 270px; font-size: 80px; margin: 0; 
+            width: 200px; height: 300px; font-size: 90px; margin: 0; margin-left: 0; /* 기존 카드 스타일 덮어쓰기 */
             transform: scale(0.5); opacity: 0; transition: 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
         }
         #draw-overlay.show #drawn-card-display { transform: scale(1); opacity: 1; }
@@ -83,8 +84,8 @@
 
     <div id="screen-login" class="screen active">
         <h1 style="font-size: 60px;">🤡 도둑잡기</h1>
-        <input type="text" id="nickname" placeholder="닉네임 입력" style="padding:15px; font-size: 18px; border-radius: 10px; border:none; text-align: center;">
-        <button onclick="joinGame()" style="padding:15px 40px; margin-top:20px; font-size: 18px; cursor:pointer; border-radius: 10px; border:none; background: #e74c3c; color: white;">게임 시작</button>
+        <input type="text" id="nickname" placeholder="닉네임 입력" style="padding:15px; font-size: 18px; text-align: center;">
+        <button onclick="joinGame()" style="padding:15px 40px; margin-top:20px; font-size: 18px; cursor:pointer;">게임 시작</button>
         <p id="wait-msg" style="margin-top:20px; font-size: 18px; display:none;">대기 중... (<span id="count">0</span>/4)</p>
     </div>
 
@@ -110,7 +111,7 @@
     <div id="screen-end" class="screen">
         <h1 style="font-size: 80px; color: #e74c3c;">🤡 게임 종료 🤡</h1>
         <h2 id="loser-name" style="color: #f1c40f; font-size: 40px;"></h2>
-        <p style="font-size: 20px; margin-top: 10px;">이 플레이어가 마지막까지 조커를 가지고 있었습니다.</p>
+        <p style="font-size: 20px;">이 플레이어가 조커를 가지고 있었습니다.</p>
         <button onclick="location.reload()" style="padding:15px 40px; margin-top: 30px; font-size: 20px; cursor:pointer;">다시 하기</button>
     </div>
 
@@ -122,6 +123,7 @@
         let isMyTurn = false;
         let currentTargetIdx = -1;
         
+        // 애니메이션 변수
         let isAnimating = false; 
         let pendingState = null; 
         let animTimeout = null;
@@ -145,7 +147,6 @@
             setNames();
         });
 
-        // 10초 타이머 애니메이션
         socket.on('timer_reset', (data) => {
             const bar = document.getElementById('timer-bar');
             bar.style.transition = 'none';
@@ -158,13 +159,13 @@
 
         socket.on('state_update', (data) => {
             if(isAnimating) {
-                pendingState = data;
+                pendingState = data; // 연출 중이면 데이터 저장해둠
                 return;
             }
             renderGameState(data);
         });
 
-        // 연출 시작
+        // [연출] 카드 뽑기
         socket.on('card_drawn_animate', (data) => {
             isAnimating = true;
             currentDrawnCard = data.card;
@@ -174,13 +175,10 @@
             const cardDisp = document.getElementById('drawn-card-display');
             const drawText = document.getElementById('draw-text');
             
-            // 카드 내용 표시 (스타일 적용)
-            cardDisp.innerText = data.card.replace(/[♠♥♦♣]/, ''); // 문양은 CSS로 처리하거나 같이 표시
-            // 그냥 텍스트로 같이 표시하는게 안전함
-            cardDisp.innerText = data.card; 
+            cardDisp.innerText = data.card.replace(/[♠♥♦♣]/, ''); 
+            cardDisp.innerText = data.card;
             
-            // 색상 적용
-            cardDisp.className = 'card';
+            cardDisp.className = 'card'; // 클래스 초기화
             if(data.card.includes('♥') || data.card.includes('♦')) cardDisp.classList.add('red');
             else if(data.card.includes('♠') || data.card.includes('♣')) cardDisp.classList.add('black');
             else if(data.card.includes('JOKER')) cardDisp.classList.add('joker');
@@ -196,8 +194,8 @@
             overlay.style.display = 'flex';
             setTimeout(() => overlay.classList.add('show'), 10);
 
-            // 2초 후 자동 스킵
-            animTimeout = setTimeout(finishAnimation, 2000);
+            // 1.5초 후 자동 닫힘 (클릭 시 더 빨리 닫힘)
+            animTimeout = setTimeout(finishAnimation, 1500);
         });
 
         function finishAnimation() {
@@ -210,20 +208,21 @@
 
             isAnimating = false;
 
+            // [연출] 뽑은 게 짝이면, 내 패에서 해당 카드 터지는 효과
             if(drawnIsPair && currentDrawnCard) {
                 triggerDiscardEffect(currentDrawnCard);
             }
 
+            // 밀린 업데이트 반영
             if(pendingState) {
-                // 버리기 연출 0.8초 기다렸다가 상태 갱신
+                // 터지는 효과 볼 시간(0.6초) 주고 갱신
                 setTimeout(() => {
                     renderGameState(pendingState);
                     pendingState = null;
-                }, drawnIsPair ? 800 : 0);
+                }, drawnIsPair ? 600 : 0);
             }
         }
 
-        // 짝이 맞는 카드 찾아서 빨갛게 터지는 효과
         function triggerDiscardEffect(cardStr) {
             const myHandDiv = document.getElementById('hand-me');
             const cards = myHandDiv.getElementsByClassName('card');
@@ -252,14 +251,14 @@
         function renderGameState(data) {
             isMyTurn = (data.turnIndex === myIndex);
             
-            if(isMyTurn) document.getElementById('status-msg').innerText = "당신 차례입니다! (10초)";
+            if(isMyTurn) document.getElementById('status-msg').innerText = "당신 차례입니다! (15초)";
             else document.getElementById('status-msg').innerText = `${playerNames[data.turnIndex]}님의 차례...`;
 
             resetHighlights();
             highlightPlayer(data.turnIndex, 'turn-active');
 
-            // 타겟 찾기
             currentTargetIdx = -1;
+            // 타겟 찾기 로직: 내 오른쪽부터 카드 있는 사람 찾기
             if(isMyTurn && data.playerCounts[myIndex] > 0) {
                 let tempIdx = (myIndex + 1) % 4;
                 while(data.playerCounts[tempIdx] === 0 && tempIdx !== myIndex) {
@@ -274,22 +273,19 @@
             // 내 패 그리기
             const myHandDiv = document.getElementById('hand-me');
             myHandDiv.innerHTML = '';
-            if(data.myHand.length === 0) myHandDiv.innerHTML = '<span style="color:#aaa; font-size:20px;">탈출 성공!</span>';
+            if(data.myHand.length === 0) myHandDiv.innerHTML = '<span style="color:#aaa; font-size:24px; font-weight:bold;">🎉 탈출 성공!</span>';
             
             data.myHand.forEach(card => {
                 const div = document.createElement('div');
                 div.innerText = card;
-                
-                // 스타일 클래스
                 div.className = 'card';
                 if(card.includes('♥') || card.includes('♦')) div.classList.add('red');
                 else if(card.includes('♠') || card.includes('♣')) div.classList.add('black');
                 else if(card.includes('JOKER')) div.classList.add('joker');
-
                 myHandDiv.appendChild(div);
             });
 
-            // 상대 패 (뒷면)
+            // 상대 패 그리기 (뒷면)
             [1, 2, 3].forEach(offset => {
                 const idx = (myIndex + offset) % 4;
                 renderOpponentHand(idx, data.playerCounts[idx], (isMyTurn && currentTargetIdx === idx));
@@ -305,7 +301,6 @@
         }
 
         function highlightPlayer(idx, className) {
-            const offsets = [0, 1, 2, 3];
             const targetOffset = (idx - myIndex + 4) % 4;
             const ids = ['p-me', 'p-next', 'p-top', 'p-prev'];
             document.getElementById(ids[targetOffset]).classList.add(className);
@@ -326,7 +321,7 @@
             
             container.innerHTML = '';
             if(count === 0) {
-                container.innerHTML = '<span style="color:#ddd; font-weight:bold;">🎉 탈출!</span>';
+                container.innerHTML = '<span style="color:#ddd; font-weight:bold; font-size:20px;">🎉 탈출!</span>';
                 return;
             }
             for(let i=0; i<count; i++) {
