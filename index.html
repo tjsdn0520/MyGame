@@ -2,29 +2,20 @@
 <html lang="ko">
 <head>
     <meta charset="UTF-8">
-    <title>Joker Game (4 Players)</title>
+    <title>Joker Game (Fixed)</title>
     <script src="/socket.io/socket.io.js"></script>
     <style>
         body { background-color: #27ae60; color: white; font-family: 'Arial', sans-serif; text-align: center; margin: 0; overflow: hidden; }
-        h2 { margin: 10px; text-shadow: 1px 1px 2px black; }
         
-        /* 화면 전환 */
         .screen { display: none; height: 100vh; flex-direction: column; justify-content: center; align-items: center; }
         .active { display: flex; }
 
-        /* 대기 화면 */
-        .loader { font-size: 50px; animation: spin 2s linear infinite; }
-        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
-
-        /* 게임 테이블 레이아웃 */
-        #game-table { 
-            position: relative; width: 100%; height: 100%; max-width: 800px; margin: 0 auto; 
-        }
+        #game-table { position: relative; width: 100%; height: 100%; max-width: 800px; margin: 0 auto; }
         
-        .player-area { position: absolute; width: 200px; transition: 0.3s; }
-        /* 위치 배치 (하단: 나, 좌/우/상: 상대) */
+        /* 플레이어 배치 */
+        .player-area { position: absolute; width: 220px; transition: 0.3s; padding: 10px; border-radius: 10px; }
         #p-me    { bottom: 20px; left: 50%; transform: translateX(-50%); } 
-        #p-next  { right: 20px; top: 50%; transform: translateY(-50%); } /* 내 다음 사람 (오른쪽) */
+        #p-next  { right: 20px; top: 50%; transform: translateY(-50%); } 
         #p-top   { top: 20px; left: 50%; transform: translateX(-50%); } 
         #p-prev  { left: 20px; top: 50%; transform: translateY(-50%); } 
 
@@ -33,42 +24,48 @@
         .card { 
             width: 50px; height: 75px; background: white; border-radius: 5px; color: black;
             display: flex; justify-content: center; align-items: center; font-weight: bold; font-size: 20px;
-            box-shadow: 2px 2px 5px rgba(0,0,0,0.3); border: 2px solid #ccc;
+            box-shadow: 2px 2px 5px rgba(0,0,0,0.3); border: 2px solid #ccc; user-select: none;
         }
-        /* 카드 뒷면 */
-        .card.back { background: repeating-linear-gradient(45deg, #e74c3c, #e74c3c 10px, #c0392b 10px, #c0392b 20px); color: transparent; cursor: pointer; }
-        .card.back:hover { transform: translateY(-10px); border-color: yellow; }
+        .card.back { background: repeating-linear-gradient(45deg, #e74c3c, #e74c3c 10px, #c0392b 10px, #c0392b 20px); color: transparent; }
         
-        .turn-indicator { border: 4px solid yellow; box-shadow: 0 0 15px yellow; border-radius: 10px; padding: 5px; background: rgba(0,0,0,0.2); }
+        /* 내 턴 & 타겟 표시 */
+        .turn-active { border: 4px solid #f1c40f; box-shadow: 0 0 20px #f1c40f; background: rgba(0,0,0,0.3); }
+        .target-active .card.back { cursor: pointer; border: 2px solid yellow; }
+        .target-active .card.back:hover { transform: translateY(-10px); }
+        
+        /* 타겟 뱃지 */
+        .target-badge { display: none; background: red; color: white; padding: 2px 8px; border-radius: 5px; font-size: 12px; margin-left: 5px; }
+        .target-active .target-badge { display: inline-block; }
+
         .nickname { font-size: 18px; font-weight: bold; margin-bottom: 5px; }
-        .msg-box { position: absolute; center; top: 50%; left: 50%; transform: translate(-50%, -50%); background: rgba(0,0,0,0.7); padding: 10px 20px; border-radius: 20px; pointer-events: none; }
+        .msg-box { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); background: rgba(0,0,0,0.7); padding: 15px 30px; border-radius: 20px; pointer-events: none; z-index: 100; font-size: 20px; }
     </style>
 </head>
 <body>
 
     <div id="screen-login" class="screen active">
         <h1>🤡 조커 뽑기</h1>
-        <input type="text" id="nickname" placeholder="닉네임 입력" style="padding:10px; font-size:16px;">
-        <button onclick="joinGame()" style="padding:10px 20px; margin-top:10px; cursor:pointer;">참가하기</button>
-        <p id="wait-msg" style="margin-top:20px; display:none;">4명이 모일 때까지 대기 중... (<span id="count">0</span>/4)</p>
-        <div id="loader" class="loader" style="display:none;">🃏</div>
+        <input type="text" id="nickname" placeholder="닉네임" style="padding:10px;">
+        <button onclick="joinGame()" style="padding:10px 20px; margin-top:10px;">참가</button>
+        <p id="wait-msg" style="display:none;">대기 중... (<span id="count">0</span>/4)</p>
     </div>
 
-    <div id="screen-game" class="screen" style="display:none;">
+    <div id="screen-game" class="screen">
         <div id="game-table">
             <div class="msg-box" id="status-msg">게임 시작!</div>
 
             <div id="p-top" class="player-area">
-                <div class="nickname" id="name-top">Player 2</div>
+                <div class="nickname" id="name-top">P2 <span class="target-badge">TARGET</span></div>
                 <div class="cards-row" id="hand-top"></div>
             </div>
-            <div id="p-prev" class="player-area"> <div class="nickname" id="name-prev">Player 3</div>
+            <div id="p-prev" class="player-area">
+                <div class="nickname" id="name-prev">P3 <span class="target-badge">TARGET</span></div>
                 <div class="cards-row" id="hand-prev"></div>
             </div>
-            <div id="p-next" class="player-area"> <div class="nickname" id="name-next">Player 1</div>
+            <div id="p-next" class="player-area">
+                <div class="nickname" id="name-next">P1 <span class="target-badge">TARGET</span></div>
                 <div class="cards-row" id="hand-next"></div>
             </div>
-
             <div id="p-me" class="player-area">
                 <div class="nickname" id="name-me">나</div>
                 <div class="cards-row" id="hand-me"></div>
@@ -79,13 +76,13 @@
     <div id="screen-end" class="screen">
         <h1 style="font-size: 50px;">게임 종료</h1>
         <h2 id="loser-name" style="color: yellow;">패배자: ???</h2>
-        <button onclick="location.reload()" style="padding:15px 30px; margin-top:20px;">다시 하기</button>
+        <button onclick="location.reload()" style="padding:15px;">다시 하기</button>
     </div>
 
     <script>
         const socket = io();
         let myRoom = null;
-        let myIndex = -1; // 0~3
+        let myIndex = -1;
         let playerNames = [];
         let isMyTurn = false;
 
@@ -93,13 +90,10 @@
             const nick = document.getElementById('nickname').value || '익명';
             socket.emit('join_game', nick);
             document.getElementById('wait-msg').style.display = 'block';
-            document.getElementById('loader').style.display = 'block';
             document.querySelector('button').disabled = true;
         }
 
-        socket.on('waiting_status', (count) => {
-            document.getElementById('count').innerText = count;
-        });
+        socket.on('waiting_status', (count) => { document.getElementById('count').innerText = count; });
 
         socket.on('game_start', (data) => {
             myRoom = data.roomID;
@@ -108,42 +102,42 @@
 
             document.getElementById('screen-login').classList.remove('active');
             document.getElementById('screen-game').classList.add('active');
-            document.getElementById('screen-game').style.display = 'block'; // 강제 표시
 
-            // 이름 배치 (나를 기준으로 회전)
-            // myIndex가 0이면: Next=1, Top=2, Prev=3
             const nextIdx = (myIndex + 1) % 4;
             const topIdx = (myIndex + 2) % 4;
             const prevIdx = (myIndex + 3) % 4;
 
             document.getElementById('name-me').innerText = playerNames[myIndex] + " (나)";
-            document.getElementById('name-next').innerText = playerNames[nextIdx] + " (Target)";
-            document.getElementById('name-top').innerText = playerNames[topIdx];
-            document.getElementById('name-prev').innerText = playerNames[prevIdx];
+            document.getElementById('name-next').innerHTML = playerNames[nextIdx] + ' <span class="target-badge">PICK!</span>';
+            document.getElementById('name-top').innerHTML = playerNames[topIdx] + ' <span class="target-badge">PICK!</span>';
+            document.getElementById('name-prev').innerHTML = playerNames[prevIdx] + ' <span class="target-badge">PICK!</span>';
         });
 
         socket.on('state_update', (data) => {
             isMyTurn = (data.turnIndex === myIndex);
             
             // 상태 메시지
-            if(isMyTurn) document.getElementById('status-msg').innerText = "내 차례! 오른쪽 플레이어 카드를 뽑으세요.";
-            else document.getElementById('status-msg').innerText = `${playerNames[data.turnIndex]}님의 차례입니다.`;
+            if(isMyTurn) document.getElementById('status-msg').innerText = "내 차례! 카드를 뽑으세요.";
+            else document.getElementById('status-msg').innerText = `${playerNames[data.turnIndex]}님의 차례...`;
 
-            // 턴 표시 (테두리)
-            document.querySelectorAll('.player-area').forEach(el => el.classList.remove('turn-indicator'));
-            if(isMyTurn) document.getElementById('p-me').classList.add('turn-indicator');
-            else {
-                // 다른 사람 턴 표시 로직
-                const nextIdx = (myIndex + 1) % 4;
-                const topIdx = (myIndex + 2) % 4;
-                const prevIdx = (myIndex + 3) % 4;
-                
-                if(data.turnIndex === nextIdx) document.getElementById('p-next').classList.add('turn-indicator');
-                if(data.turnIndex === topIdx) document.getElementById('p-top').classList.add('turn-indicator');
-                if(data.turnIndex === prevIdx) document.getElementById('p-prev').classList.add('turn-indicator');
+            // 1. 턴 표시 (누구 차례인지 테두리)
+            resetHighlights();
+            const turnOwnerIdx = data.turnIndex;
+            highlightPlayer(turnOwnerIdx, 'turn-active');
+
+            // 2. 타겟 찾기 (내 차례일 때만 유효)
+            let targetIdx = -1;
+            if(isMyTurn) {
+                // 내 오른쪽부터 탐색해서 카드가 있는 첫 사람 찾기
+                targetIdx = (myIndex + 1) % 4;
+                while(data.playerCounts[targetIdx] === 0 && targetIdx !== myIndex) {
+                    targetIdx = (targetIdx + 1) % 4;
+                }
+                // 찾은 타겟 강조
+                highlightPlayer(targetIdx, 'target-active');
             }
 
-            // 내 카드 그리기
+            // 3. 내 패 렌더링
             const myHandDiv = document.getElementById('hand-me');
             myHandDiv.innerHTML = '';
             data.myHand.forEach(card => {
@@ -154,33 +148,57 @@
                 myHandDiv.appendChild(div);
             });
 
-            // 상대방 카드 그리기 (뒷면, 개수만큼)
-            renderOpponentHand('hand-next', data.playerCounts[(myIndex + 1) % 4], isMyTurn); // isMyTurn일 때만 클릭 가능
-            renderOpponentHand('hand-top', data.playerCounts[(myIndex + 2) % 4], false);
-            renderOpponentHand('hand-prev', data.playerCounts[(myIndex + 3) % 4], false);
+            // 4. 상대 패 렌더링
+            const nextIdx = (myIndex + 1) % 4;
+            const topIdx = (myIndex + 2) % 4;
+            const prevIdx = (myIndex + 3) % 4;
+
+            renderOpponentHand('hand-next', data.playerCounts[nextIdx], (isMyTurn && targetIdx === nextIdx));
+            renderOpponentHand('hand-top', data.playerCounts[topIdx], (isMyTurn && targetIdx === topIdx));
+            renderOpponentHand('hand-prev', data.playerCounts[prevIdx], (isMyTurn && targetIdx === prevIdx));
         });
 
         socket.on('action_log', (data) => {
-            // 누가 뽑았는지 알림 (잠깐 보여주고 사라짐)
-            const msgBox = document.getElementById('status-msg');
-            msgBox.innerText = data.msg;
+            document.getElementById('status-msg').innerText = data.msg;
         });
 
         socket.on('game_over', (data) => {
             document.getElementById('screen-game').style.display = 'none';
             document.getElementById('screen-end').classList.add('active');
-            document.getElementById('loser-name').innerText = `패배자: ${data.loser} (조커 보유)`;
+            document.getElementById('loser-name').innerText = `패배자: ${data.loser} (조커)`;
         });
 
-        function renderOpponentHand(elementId, count, clickable) {
+        // 플레이어 ID(0~3)를 UI ID로 변환하여 클래스 추가
+        function highlightPlayer(idx, className) {
+            let id = '';
+            if(idx === myIndex) id = 'p-me';
+            else if(idx === (myIndex + 1) % 4) id = 'p-next';
+            else if(idx === (myIndex + 2) % 4) id = 'p-top';
+            else id = 'p-prev';
+            document.getElementById(id).classList.add(className);
+        }
+
+        function resetHighlights() {
+            document.querySelectorAll('.player-area').forEach(el => {
+                el.classList.remove('turn-active');
+                el.classList.remove('target-active');
+            });
+        }
+
+        function renderOpponentHand(elementId, count, isClickable) {
             const container = document.getElementById(elementId);
             container.innerHTML = '';
+            // 탈출했으면 표시
+            if(count === 0) {
+                container.innerHTML = '<span style="color:#aaa;">탈출 완료!</span>';
+                return;
+            }
             for(let i=0; i<count; i++) {
                 const div = document.createElement('div');
                 div.className = 'card back';
                 div.innerText = "?";
-                if(clickable) {
-                    div.onclick = () => pickCard(i); // 클릭 이벤트
+                if(isClickable) {
+                    div.onclick = () => pickCard(i);
                     div.style.cursor = 'pointer';
                 } else {
                     div.style.cursor = 'default';
