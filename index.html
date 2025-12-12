@@ -7,9 +7,9 @@
     <link href="https://fonts.googleapis.com/css2?family=Jua&display=swap" rel="stylesheet">
     <style>
         body { 
-            background: radial-gradient(circle, #2c3e50 0%, #000000 100%); /* 고급진 어두운 배경 */
+            background: radial-gradient(circle, #2c3e50 0%, #000000 100%); 
             color: white; 
-            font-family: 'Jua', sans-serif; /* 게임 폰트 */
+            font-family: 'Jua', sans-serif; 
             text-align: center; 
             margin: 0; 
             overflow: hidden; 
@@ -19,20 +19,17 @@
         .screen { display: none; height: 100vh; flex-direction: column; justify-content: center; align-items: center; }
         .active { display: flex; }
 
-        /* 타이머 바 */
         #timer-container { position: absolute; top: 0; left: 0; width: 100%; height: 8px; background: #222; z-index: 100; }
         #timer-bar { width: 100%; height: 100%; background: linear-gradient(90deg, #f1c40f, #e67e22); transition: width 1s linear; box-shadow: 0 0 10px #f1c40f; }
 
         #game-table { 
             position: relative; width: 100%; height: 100%; max-width: 1200px; margin: 0 auto; 
-            background: radial-gradient(circle, #27ae60 0%, #145a32 100%); /* 포커 테이블 느낌 */
-            border: 20px solid #3e2723; /* 나무 테두리 느낌 */
-            border-radius: 50px;
+            background: radial-gradient(circle, #27ae60 0%, #145a32 100%); 
+            border: 20px solid #3e2723; border-radius: 50px;
             box-shadow: inset 0 0 50px rgba(0,0,0,0.8);
             box-sizing: border-box;
         }
         
-        /* 플레이어 영역 */
         .player-area { position: absolute; width: 260px; transition: 0.3s; padding: 10px; border-radius: 15px; }
         #p-me    { bottom: 30px; left: 50%; transform: translateX(-50%); } 
         #p-next  { right: 40px; top: 50%; transform: translateY(-50%); } 
@@ -41,14 +38,11 @@
 
         .cards-row { display: flex; justify-content: center; height: 110px; margin-top: 10px; perspective: 1000px; }
         
-        /* 카드 스타일 */
         .card { 
             width: 70px; height: 105px; background: white; border-radius: 8px; 
             display: flex; justify-content: center; align-items: center; font-weight: bold; font-size: 28px;
             box-shadow: 2px 2px 8px rgba(0,0,0,0.5); border: 1px solid #ccc; position: relative; 
-            margin-left: -40px; /* 겹치기 */
-            transition: 0.3s;
-            cursor: default;
+            margin-left: -40px; transition: 0.3s; cursor: default;
         }
         .card:hover { transform: translateY(-30px) scale(1.1); z-index: 100; margin-right: 40px; box-shadow: 0 10px 20px rgba(0,0,0,0.5); }
         
@@ -61,7 +55,6 @@
             color: transparent; border: 2px solid #ecf0f1;
         }
         
-        /* 버려지는 효과 */
         .discard-anim { animation: discardEffect 0.8s forwards; z-index: 200; }
         @keyframes discardEffect {
             0% { transform: scale(1) translateY(0) rotate(0deg); opacity: 1; }
@@ -69,7 +62,6 @@
             100% { transform: scale(0) translateY(-200px); opacity: 0; }
         }
 
-        /* 턴 표시 */
         .turn-active { 
             border: 4px solid #f1c40f; 
             box-shadow: 0 0 20px #f1c40f, inset 0 0 20px rgba(241, 196, 15, 0.3); 
@@ -89,7 +81,6 @@
             pointer-events: none; z-index: 50; font-size: 24px; color: #f1c40f; box-shadow: 0 5px 15px black;
         }
 
-        /* 시작 버튼 스타일 */
         .game-btn {
             background: linear-gradient(to bottom, #e74c3c, #c0392b);
             border: none; border-radius: 15px; color: white; padding: 15px 50px;
@@ -102,7 +93,6 @@
 
         input { padding: 15px; font-size: 20px; border-radius: 10px; border: none; text-align: center; font-family: 'Jua'; width: 200px; }
 
-        /* 연출 오버레이 */
         #draw-overlay {
             position: fixed; top: 0; left: 0; width: 100%; height: 100%;
             background: rgba(0,0,0,0.9); z-index: 500; display: none;
@@ -118,13 +108,14 @@
         #draw-overlay.show #drawn-card-display { transform: scale(1) rotate(0deg); opacity: 1; }
         #draw-text { margin-top: 40px; font-size: 40px; opacity: 0; transition: 0.3s; text-shadow: 0 0 10px white; }
         #draw-overlay.show #draw-text { opacity: 1; }
+        #skip-hint { margin-top: 20px; color: #aaa; font-size: 16px; }
 
     </style>
 </head>
 <body>
 
     <audio id="bgm" loop>
-        <source src="https://raw.githubusercontent.com/tictactoe-toy/toy-assets/master/music/Kevin_MacLeod_-_Pixelland.mp3" type="audio/mp3">
+        <source src="https://cdn.pixabay.com/download/audio/2022/03/24/audio_1978255577.mp3?filename=jazzy-abstract-beat-11254.mp3" type="audio/mp3">
     </audio>
 
     <div id="screen-login" class="screen active">
@@ -155,7 +146,7 @@
     <div id="draw-overlay" onclick="finishAnimation()">
         <div id="drawn-card-display" class="card">?</div>
         <div id="draw-text">카드 획득!</div>
-        <div id="skip-hint" style="margin-top: 20px; color: #aaa; font-size: 16px;">(화면을 클릭하면 넘어갑니다)</div>
+        <div id="skip-hint">(화면을 클릭하면 넘어갑니다)</div>
     </div>
 
     <div id="screen-end" class="screen">
@@ -178,26 +169,30 @@
         let animTimeout = null;
         let currentDrawnCard = null;
         let drawnIsPair = false;
-        let hasEscaped = false; // 탈출 여부 체크
+        let hasEscaped = false;
 
-        // 음성 합성 (TTS) 설정
         function speak(text) {
             if (!window.speechSynthesis) return;
             const utter = new SpeechSynthesisUtterance(text);
             utter.lang = 'ko-KR';
-            utter.rate = 1.1; // 약간 빠르게
-            // 여자 목소리 찾기 노력
+            utter.rate = 1.1; 
             const voices = window.speechSynthesis.getVoices();
             const femaleVoice = voices.find(v => v.name.includes('Google') || v.name.includes('Yuna') || v.name.includes('Female'));
             if (femaleVoice) utter.voice = femaleVoice;
             window.speechSynthesis.speak(utter);
         }
 
-        // BGM 재생
+        // [수정됨] BGM 재생 함수 개선
         function playBGM() {
             const bgm = document.getElementById('bgm');
-            bgm.volume = 0.3;
-            bgm.play().catch(e => console.log("BGM 재생 실패(사용자 인터랙션 필요)"));
+            bgm.volume = 0.3; // 볼륨 조절
+            // 사용자가 클릭한 직후 호출되므로 재생 성공 확률 높음
+            bgm.play().then(() => {
+                console.log("BGM 재생 성공");
+            }).catch(e => {
+                console.log("BGM 재생 실패 (브라우저 정책):", e);
+                // 실패 시 한번 더 시도 (클릭 이벤트 리스너 추가 등은 복잡하므로 로그만)
+            });
         }
 
         function joinGame() {
@@ -205,7 +200,9 @@
             socket.emit('join_game', nick);
             document.getElementById('wait-msg').style.display = 'block';
             document.querySelector('button').disabled = true;
-            playBGM(); // 버튼 클릭 시 BGM 시작
+            
+            // [중요] 버튼 클릭 시점에서 BGM 재생 시도
+            playBGM(); 
         }
         
         socket.on('waiting_status', (count) => document.getElementById('count').innerText = count);
@@ -238,7 +235,6 @@
             renderGameState(data);
         });
 
-        // 카드 뽑기 연출
         socket.on('card_drawn_animate', (data) => {
             isAnimating = true;
             currentDrawnCard = data.card;
@@ -258,18 +254,17 @@
 
             if(drawnIsPair) {
                 drawText.innerText = "나이스! 짝을 맞췄어요!";
-                drawText.style.color = "#f1948a"; // 연한 빨강
+                drawText.style.color = "#f1948a"; 
                 speak("나이스! 짝을 맞췄어요.");
             } else {
                 drawText.innerText = "카드를 가져왔습니다.";
                 drawText.style.color = "white";
-                // speak("카드를 가져왔습니다."); // 너무 시끄러울 수 있어서 생략
             }
             
             overlay.style.display = 'flex';
             setTimeout(() => overlay.classList.add('show'), 10);
 
-            animTimeout = setTimeout(finishAnimation, 1500); // 1.5초 후 자동 닫힘
+            animTimeout = setTimeout(finishAnimation, 1500);
         });
 
         function finishAnimation() {
@@ -352,7 +347,6 @@
                 }
             }
 
-            // 내 패 그리기
             const myHandDiv = document.getElementById('hand-me');
             myHandDiv.innerHTML = '';
             
