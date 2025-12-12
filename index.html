@@ -2,7 +2,7 @@
 <html lang="ko">
 <head>
     <meta charset="UTF-8">
-    <title>Joker Game (Fixed)</title>
+    <title>Joker Game (Final Rule)</title>
     <script src="/socket.io/socket.io.js"></script>
     <style>
         body { background-color: #27ae60; color: white; font-family: 'Arial', sans-serif; text-align: center; margin: 0; overflow: hidden; }
@@ -12,7 +12,7 @@
 
         #game-table { position: relative; width: 100%; height: 100%; max-width: 800px; margin: 0 auto; }
         
-        /* 플레이어 배치 */
+        /* 플레이어 영역 */
         .player-area { position: absolute; width: 220px; transition: 0.3s; padding: 10px; border-radius: 10px; }
         #p-me    { bottom: 20px; left: 50%; transform: translateX(-50%); } 
         #p-next  { right: 20px; top: 50%; transform: translateY(-50%); } 
@@ -21,62 +21,71 @@
 
         .cards-row { display: flex; justify-content: center; gap: 5px; flex-wrap: wrap; min-height: 80px; }
         
+        /* 카드 스타일 */
         .card { 
             width: 50px; height: 75px; background: white; border-radius: 5px; color: black;
             display: flex; justify-content: center; align-items: center; font-weight: bold; font-size: 20px;
             box-shadow: 2px 2px 5px rgba(0,0,0,0.3); border: 2px solid #ccc; user-select: none;
         }
+        .card.joker { color: red; }
         .card.back { background: repeating-linear-gradient(45deg, #e74c3c, #e74c3c 10px, #c0392b 10px, #c0392b 20px); color: transparent; }
         
-        /* 내 턴 & 타겟 표시 */
+        /* 턴 & 타겟 강조 */
         .turn-active { border: 4px solid #f1c40f; box-shadow: 0 0 20px #f1c40f; background: rgba(0,0,0,0.3); }
-        .target-active .card.back { cursor: pointer; border: 2px solid yellow; }
-        .target-active .card.back:hover { transform: translateY(-10px); }
-        
-        /* 타겟 뱃지 */
+        .target-active .card.back { cursor: pointer; border: 2px solid yellow; animation: pulse 1s infinite alternate; }
+        @keyframes pulse { from { transform: scale(1); } to { transform: scale(1.05); } }
+
         .target-badge { display: none; background: red; color: white; padding: 2px 8px; border-radius: 5px; font-size: 12px; margin-left: 5px; }
         .target-active .target-badge { display: inline-block; }
 
         .nickname { font-size: 18px; font-weight: bold; margin-bottom: 5px; }
-        .msg-box { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); background: rgba(0,0,0,0.7); padding: 15px 30px; border-radius: 20px; pointer-events: none; z-index: 100; font-size: 20px; }
+        .msg-box { position: absolute; top: 40%; left: 50%; transform: translate(-50%, -50%); background: rgba(0,0,0,0.7); padding: 10px 20px; border-radius: 20px; pointer-events: none; z-index: 50; }
+
+        /* [NEW] 카드 뽑기 연출 오버레이 */
+        #draw-overlay {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0,0,0,0.85); z-index: 200; display: none;
+            flex-direction: column; justify-content: center; align-items: center;
+        }
+        #drawn-card-display {
+            width: 150px; height: 225px; font-size: 60px; 
+            transform: scale(0.5); opacity: 0; transition: 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+        }
+        #draw-overlay.show #drawn-card-display { transform: scale(1); opacity: 1; }
+        #draw-text { margin-top: 20px; font-size: 24px; opacity: 0; transition: 0.5s 0.3s; }
+        #draw-overlay.show #draw-text { opacity: 1; }
+
     </style>
 </head>
 <body>
 
     <div id="screen-login" class="screen active">
-        <h1>🤡 조커 뽑기</h1>
+        <h1>🤡 조커 뽑기 (완전판)</h1>
         <input type="text" id="nickname" placeholder="닉네임" style="padding:10px;">
         <button onclick="joinGame()" style="padding:10px 20px; margin-top:10px;">참가</button>
-        <p id="wait-msg" style="display:none;">대기 중... (<span id="count">0</span>/4)</p>
+        <p id="wait-msg" style="display:none;">4명 모으는 중... (<span id="count">0</span>/4)</p>
     </div>
 
     <div id="screen-game" class="screen">
         <div id="game-table">
-            <div class="msg-box" id="status-msg">게임 시작!</div>
+            <div class="msg-box" id="status-msg">게임 시작! 페어를 버립니다.</div>
 
-            <div id="p-top" class="player-area">
-                <div class="nickname" id="name-top">P2 <span class="target-badge">TARGET</span></div>
-                <div class="cards-row" id="hand-top"></div>
-            </div>
-            <div id="p-prev" class="player-area">
-                <div class="nickname" id="name-prev">P3 <span class="target-badge">TARGET</span></div>
-                <div class="cards-row" id="hand-prev"></div>
-            </div>
-            <div id="p-next" class="player-area">
-                <div class="nickname" id="name-next">P1 <span class="target-badge">TARGET</span></div>
-                <div class="cards-row" id="hand-next"></div>
-            </div>
-            <div id="p-me" class="player-area">
-                <div class="nickname" id="name-me">나</div>
-                <div class="cards-row" id="hand-me"></div>
-            </div>
+            <div id="p-top" class="player-area"><div class="nickname" id="name-top">P2</div><div class="cards-row" id="hand-top"></div></div>
+            <div id="p-prev" class="player-area"><div class="nickname" id="name-prev">P3</div><div class="cards-row" id="hand-prev"></div></div>
+            <div id="p-next" class="player-area"><div class="nickname" id="name-next">P1</div><div class="cards-row" id="hand-next"></div></div>
+            <div id="p-me" class="player-area"><div class="nickname" id="name-me">나</div><div class="cards-row" id="hand-me"></div></div>
         </div>
     </div>
 
+    <div id="draw-overlay">
+        <div id="drawn-card-display" class="card">?</div>
+        <div id="draw-text">카드를 뽑았습니다!</div>
+    </div>
+
     <div id="screen-end" class="screen">
-        <h1 style="font-size: 50px;">게임 종료</h1>
-        <h2 id="loser-name" style="color: yellow;">패배자: ???</h2>
-        <button onclick="location.reload()" style="padding:15px;">다시 하기</button>
+        <h1 style="font-size: 50px; color:red;">🤡 게임 종료 🤡</h1>
+        <h2 id="loser-name" style="color: yellow;"></h2>
+        <button onclick="location.reload()" style="padding:15px; margin-top: 20px;">다시 하기</button>
     </div>
 
     <script>
@@ -85,6 +94,11 @@
         let myIndex = -1;
         let playerNames = [];
         let isMyTurn = false;
+        let currentTargetIdx = -1; // 현재 내가 뽑아야 할 타겟 인덱스
+        
+        // [중요] 애니메이션 중 상태 업데이트 방지 플래그
+        let isAnimating = false; 
+        let pendingState = null; // 애니메이션 중 도착한 최신 상태 저장
 
         function joinGame() {
             const nick = document.getElementById('nickname').value || '익명';
@@ -92,105 +106,135 @@
             document.getElementById('wait-msg').style.display = 'block';
             document.querySelector('button').disabled = true;
         }
-
-        socket.on('waiting_status', (count) => { document.getElementById('count').innerText = count; });
+        socket.on('waiting_status', (count) => document.getElementById('count').innerText = count);
 
         socket.on('game_start', (data) => {
             myRoom = data.roomID;
             myIndex = data.myIndex;
             playerNames = data.players;
-
             document.getElementById('screen-login').classList.remove('active');
             document.getElementById('screen-game').classList.add('active');
-
-            const nextIdx = (myIndex + 1) % 4;
-            const topIdx = (myIndex + 2) % 4;
-            const prevIdx = (myIndex + 3) % 4;
-
-            document.getElementById('name-me').innerText = playerNames[myIndex] + " (나)";
-            document.getElementById('name-next').innerHTML = playerNames[nextIdx] + ' <span class="target-badge">PICK!</span>';
-            document.getElementById('name-top').innerHTML = playerNames[topIdx] + ' <span class="target-badge">PICK!</span>';
-            document.getElementById('name-prev').innerHTML = playerNames[prevIdx] + ' <span class="target-badge">PICK!</span>';
+            setNames();
         });
 
+        // 서버로부터 전체 게임 상태 업데이트 받음
         socket.on('state_update', (data) => {
-            isMyTurn = (data.turnIndex === myIndex);
-            
-            // 상태 메시지
-            if(isMyTurn) document.getElementById('status-msg').innerText = "내 차례! 카드를 뽑으세요.";
-            else document.getElementById('status-msg').innerText = `${playerNames[data.turnIndex]}님의 차례...`;
-
-            // 1. 턴 표시 (누구 차례인지 테두리)
-            resetHighlights();
-            const turnOwnerIdx = data.turnIndex;
-            highlightPlayer(turnOwnerIdx, 'turn-active');
-
-            // 2. 타겟 찾기 (내 차례일 때만 유효)
-            let targetIdx = -1;
-            if(isMyTurn) {
-                // 내 오른쪽부터 탐색해서 카드가 있는 첫 사람 찾기
-                targetIdx = (myIndex + 1) % 4;
-                while(data.playerCounts[targetIdx] === 0 && targetIdx !== myIndex) {
-                    targetIdx = (targetIdx + 1) % 4;
-                }
-                // 찾은 타겟 강조
-                highlightPlayer(targetIdx, 'target-active');
+            // 애니메이션 중이면 나중에 처리하기 위해 저장만 해둠
+            if(isAnimating) {
+                pendingState = data;
+                return;
             }
-
-            // 3. 내 패 렌더링
-            const myHandDiv = document.getElementById('hand-me');
-            myHandDiv.innerHTML = '';
-            data.myHand.forEach(card => {
-                const div = document.createElement('div');
-                div.className = 'card';
-                div.innerText = card;
-                if(card === '🤡') div.style.color = 'red';
-                myHandDiv.appendChild(div);
-            });
-
-            // 4. 상대 패 렌더링
-            const nextIdx = (myIndex + 1) % 4;
-            const topIdx = (myIndex + 2) % 4;
-            const prevIdx = (myIndex + 3) % 4;
-
-            renderOpponentHand('hand-next', data.playerCounts[nextIdx], (isMyTurn && targetIdx === nextIdx));
-            renderOpponentHand('hand-top', data.playerCounts[topIdx], (isMyTurn && targetIdx === topIdx));
-            renderOpponentHand('hand-prev', data.playerCounts[prevIdx], (isMyTurn && targetIdx === prevIdx));
+            renderGameState(data);
         });
 
-        socket.on('action_log', (data) => {
-            document.getElementById('status-msg').innerText = data.msg;
+        // [NEW] 카드 뽑기 연출 신호 받음
+        socket.on('card_drawn_animate', (data) => {
+            isAnimating = true; // 애니메이션 시작
+            const overlay = document.getElementById('draw-overlay');
+            const cardDisp = document.getElementById('drawn-card-display');
+            
+            cardDisp.innerText = data.card;
+            cardDisp.className = data.card === '🤡' ? 'card joker' : 'card';
+            
+            overlay.style.display = 'flex';
+            // 약간의 딜레이 후 등장 애니메이션 클래스 추가
+            setTimeout(() => overlay.classList.add('show'), 50);
+
+            // 2초 후 연출 종료
+            setTimeout(() => {
+                overlay.classList.remove('show');
+                setTimeout(() => overlay.style.display = 'none', 300); // fade out 기다림
+
+                isAnimating = false; // 애니메이션 종료
+                // 밀려있던 최신 상태가 있으면 반영 (페어가 제거된 상태)
+                if(pendingState) {
+                    renderGameState(pendingState);
+                    pendingState = null;
+                }
+            }, 2000);
         });
+
+        socket.on('action_log', (data) => document.getElementById('status-msg').innerText = data.msg);
 
         socket.on('game_over', (data) => {
             document.getElementById('screen-game').style.display = 'none';
             document.getElementById('screen-end').classList.add('active');
-            document.getElementById('loser-name').innerText = `패배자: ${data.loser} (조커)`;
+            document.getElementById('loser-name').innerText = `패배자: ${data.loser} (조커 보유)`;
         });
 
-        // 플레이어 ID(0~3)를 UI ID로 변환하여 클래스 추가
+        // 게임 상태 화면에 그리기
+        function renderGameState(data) {
+            isMyTurn = (data.turnIndex === myIndex);
+            
+            if(isMyTurn) document.getElementById('status-msg').innerText = "내 차례! 빛나는 카드를 뽑으세요.";
+            else document.getElementById('status-msg').innerText = `${playerNames[data.turnIndex]}님의 차례...`;
+
+            resetHighlights();
+            highlightPlayer(data.turnIndex, 'turn-active');
+
+            // 타겟 찾기: 내 오른쪽부터 카드가 있는 첫 번째 사람
+            currentTargetIdx = -1;
+            if(isMyTurn && data.playerCounts[myIndex] > 0) { // 나도 카드가 있어야 턴 진행 가능
+                let tempIdx = (myIndex + 1) % 4;
+                while(data.playerCounts[tempIdx] === 0 && tempIdx !== myIndex) {
+                    tempIdx = (tempIdx + 1) % 4;
+                }
+                if(data.playerCounts[tempIdx] > 0 && tempIdx !== myIndex) {
+                     currentTargetIdx = tempIdx;
+                     highlightPlayer(currentTargetIdx, 'target-active');
+                }
+            }
+
+            // 내 카드 그리기
+            const myHandDiv = document.getElementById('hand-me');
+            myHandDiv.innerHTML = '';
+            if(data.myHand.length === 0) myHandDiv.innerHTML = '<span style="color:#aaa;">탈출 완료!</span>';
+            data.myHand.forEach(card => {
+                const div = document.createElement('div');
+                div.className = card === '🤡' ? 'card joker' : 'card';
+                div.innerText = card;
+                myHandDiv.appendChild(div);
+            });
+
+            // 상대 패 그리기
+            [1, 2, 3].forEach(offset => {
+                const idx = (myIndex + offset) % 4;
+                renderOpponentHand(idx, data.playerCounts[idx], (isMyTurn && currentTargetIdx === idx));
+            });
+        }
+
+        function setNames() {
+            const p = playerNames;
+            document.getElementById('name-me').innerText = p[myIndex];
+            document.getElementById('name-next').innerHTML = p[(myIndex + 1)%4] + ' <span class="target-badge">PICK</span>';
+            document.getElementById('name-top').innerHTML = p[(myIndex + 2)%4] + ' <span class="target-badge">PICK</span>';
+            document.getElementById('name-prev').innerHTML = p[(myIndex + 3)%4] + ' <span class="target-badge">PICK</span>';
+        }
+
         function highlightPlayer(idx, className) {
-            let id = '';
-            if(idx === myIndex) id = 'p-me';
-            else if(idx === (myIndex + 1) % 4) id = 'p-next';
-            else if(idx === (myIndex + 2) % 4) id = 'p-top';
-            else id = 'p-prev';
-            document.getElementById(id).classList.add(className);
+            const offsets = [0, 1, 2, 3]; // me, next, top, prev
+            const targetOffset = (idx - myIndex + 4) % 4;
+            const ids = ['p-me', 'p-next', 'p-top', 'p-prev'];
+            document.getElementById(ids[targetOffset]).classList.add(className);
         }
 
         function resetHighlights() {
-            document.querySelectorAll('.player-area').forEach(el => {
+            ['p-me', 'p-next', 'p-top', 'p-prev'].forEach(id => {
+                const el = document.getElementById(id);
                 el.classList.remove('turn-active');
                 el.classList.remove('target-active');
             });
         }
 
-        function renderOpponentHand(elementId, count, isClickable) {
-            const container = document.getElementById(elementId);
+        function renderOpponentHand(idx, count, isClickable) {
+            const offsets = [0, 1, 2, 3];
+            const targetOffset = (idx - myIndex + 4) % 4;
+            const ids = ['p-me', 'p-next', 'p-top', 'p-prev'];
+            const container = document.getElementById(ids[targetOffset].replace('p-', 'hand-'));
+            
             container.innerHTML = '';
-            // 탈출했으면 표시
             if(count === 0) {
-                container.innerHTML = '<span style="color:#aaa;">탈출 완료!</span>';
+                container.innerHTML = '<span style="color:#aaa;">탈출!</span>';
                 return;
             }
             for(let i=0; i<count; i++) {
@@ -198,7 +242,7 @@
                 div.className = 'card back';
                 div.innerText = "?";
                 if(isClickable) {
-                    div.onclick = () => pickCard(i);
+                    div.onclick = () => pickCard(idx, i);
                     div.style.cursor = 'pointer';
                 } else {
                     div.style.cursor = 'default';
@@ -207,10 +251,11 @@
             }
         }
 
-        function pickCard(index) {
-            if(!isMyTurn) return;
-            socket.emit('draw_card', { roomID: myRoom, cardIndex: index });
-            isMyTurn = false; // 중복 클릭 방지
+        function pickCard(targetIdx, cardIdx) {
+            if(!isMyTurn || isAnimating) return;
+            // 서버에 타겟 인덱스도 같이 보냄
+            socket.emit('draw_card', { roomID: myRoom, targetIndex: targetIdx, cardIndex: cardIdx });
+            isMyTurn = false;
         }
     </script>
 </body>
