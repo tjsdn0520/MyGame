@@ -2,91 +2,141 @@
 <html lang="ko">
 <head>
     <meta charset="UTF-8">
-    <title>Old Maid Online</title>
+    <title>Royal Joker Online</title>
     <script src="/socket.io/socket.io.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Jua&display=swap" rel="stylesheet">
     <style>
-        body { background-color: #2c3e50; color: white; font-family: 'Arial', sans-serif; text-align: center; margin: 0; overflow: hidden; user-select: none; }
+        body { 
+            background: radial-gradient(circle, #2c3e50 0%, #000000 100%); /* 고급진 어두운 배경 */
+            color: white; 
+            font-family: 'Jua', sans-serif; /* 게임 폰트 */
+            text-align: center; 
+            margin: 0; 
+            overflow: hidden; 
+            user-select: none; 
+        }
         
         .screen { display: none; height: 100vh; flex-direction: column; justify-content: center; align-items: center; }
         .active { display: flex; }
 
         /* 타이머 바 */
-        #timer-container { position: absolute; top: 0; left: 0; width: 100%; height: 10px; background: #333; z-index: 100; }
-        #timer-bar { width: 100%; height: 100%; background: #e74c3c; transition: width 1s linear; }
+        #timer-container { position: absolute; top: 0; left: 0; width: 100%; height: 8px; background: #222; z-index: 100; }
+        #timer-bar { width: 100%; height: 100%; background: linear-gradient(90deg, #f1c40f, #e67e22); transition: width 1s linear; box-shadow: 0 0 10px #f1c40f; }
 
-        #game-table { position: relative; width: 100%; height: 100%; max-width: 1000px; margin: 0 auto; margin-top: 30px; }
+        #game-table { 
+            position: relative; width: 100%; height: 100%; max-width: 1200px; margin: 0 auto; 
+            background: radial-gradient(circle, #27ae60 0%, #145a32 100%); /* 포커 테이블 느낌 */
+            border: 20px solid #3e2723; /* 나무 테두리 느낌 */
+            border-radius: 50px;
+            box-shadow: inset 0 0 50px rgba(0,0,0,0.8);
+            box-sizing: border-box;
+        }
         
         /* 플레이어 영역 */
-        .player-area { position: absolute; width: 250px; transition: 0.3s; padding: 10px; border-radius: 10px; }
+        .player-area { position: absolute; width: 260px; transition: 0.3s; padding: 10px; border-radius: 15px; }
         #p-me    { bottom: 30px; left: 50%; transform: translateX(-50%); } 
-        #p-next  { right: 30px; top: 50%; transform: translateY(-50%); } 
+        #p-next  { right: 40px; top: 50%; transform: translateY(-50%); } 
         #p-top   { top: 40px; left: 50%; transform: translateX(-50%); } 
-        #p-prev  { left: 30px; top: 50%; transform: translateY(-50%); } 
+        #p-prev  { left: 40px; top: 50%; transform: translateY(-50%); } 
 
-        .cards-row { display: flex; justify-content: center; height: 100px; margin-top: 10px; }
+        .cards-row { display: flex; justify-content: center; height: 110px; margin-top: 10px; perspective: 1000px; }
         
-        /* 카드 스타일 (겹치기 효과) */
+        /* 카드 스타일 */
         .card { 
-            width: 60px; height: 90px; background: white; border-radius: 6px; 
-            display: flex; justify-content: center; align-items: center; font-weight: bold; font-size: 24px;
-            box-shadow: 2px 2px 6px rgba(0,0,0,0.4); border: 1px solid #ccc; position: relative; 
-            margin-left: -35px; /* 카드를 겹치게 */
+            width: 70px; height: 105px; background: white; border-radius: 8px; 
+            display: flex; justify-content: center; align-items: center; font-weight: bold; font-size: 28px;
+            box-shadow: 2px 2px 8px rgba(0,0,0,0.5); border: 1px solid #ccc; position: relative; 
+            margin-left: -40px; /* 겹치기 */
             transition: 0.3s;
+            cursor: default;
         }
-        .card:first-child { margin-left: 0; }
-        .card:hover { transform: translateY(-20px); z-index: 100; margin-right: 35px; } /* 호버 시 펼쳐짐 */
+        .card:hover { transform: translateY(-30px) scale(1.1); z-index: 100; margin-right: 40px; box-shadow: 0 10px 20px rgba(0,0,0,0.5); }
         
-        /* 색상 */
         .card.red { color: #c0392b; }
         .card.black { color: #2c3e50; }
-        .card.joker { color: #8e44ad; border: 2px solid #8e44ad; }
+        .card.joker { color: #8e44ad; border: 2px solid #8e44ad; text-shadow: 0 0 5px #d2b4de; }
         
-        /* 뒷면 패턴 */
         .card.back { 
-            background: repeating-linear-gradient(45deg, #2980b9, #2980b9 10px, #3498db 10px, #3498db 20px); 
-            color: transparent; border: 2px solid white; cursor: default;
+            background: repeating-linear-gradient(45deg, #2c3e50, #2c3e50 10px, #34495e 10px, #34495e 20px); 
+            color: transparent; border: 2px solid #ecf0f1;
         }
         
-        /* 턴 & 타겟 */
-        .turn-active { border: 3px solid #f1c40f; box-shadow: 0 0 20px #f1c40f; background: rgba(0,0,0,0.3); }
-        .target-active .card.back { cursor: pointer; border: 2px solid #f1c40f; animation: pulse 0.8s infinite alternate; }
-        @keyframes pulse { from { transform: translateY(0); } to { transform: translateY(-8px); } }
-
-        /* 버려지는 애니메이션 (확대 후 투명) */
-        .discard-anim { animation: discardEffect 0.8s forwards; position: relative; z-index: 200; }
+        /* 버려지는 효과 */
+        .discard-anim { animation: discardEffect 0.8s forwards; z-index: 200; }
         @keyframes discardEffect {
-            0% { transform: scale(1); opacity: 1; background: #fff; }
-            50% { transform: scale(1.5); opacity: 0.8; background: #ffcccc; box-shadow: 0 0 20px red; }
-            100% { transform: scale(2); opacity: 0; }
+            0% { transform: scale(1) translateY(0) rotate(0deg); opacity: 1; }
+            50% { transform: scale(1.5) translateY(-100px) rotate(180deg); opacity: 0.8; box-shadow: 0 0 30px gold; }
+            100% { transform: scale(0) translateY(-200px); opacity: 0; }
         }
 
-        .nickname { font-size: 20px; font-weight: bold; text-shadow: 1px 1px 2px black; }
-        .msg-box { position: absolute; top: 45%; left: 50%; transform: translate(-50%, -50%); background: rgba(0,0,0,0.8); padding: 15px 30px; border-radius: 30px; pointer-events: none; z-index: 50; font-size: 22px; }
+        /* 턴 표시 */
+        .turn-active { 
+            border: 4px solid #f1c40f; 
+            box-shadow: 0 0 20px #f1c40f, inset 0 0 20px rgba(241, 196, 15, 0.3); 
+            background: rgba(0,0,0,0.4); 
+        }
+        .target-active .card.back { 
+            cursor: pointer; border: 2px solid yellow; 
+            animation: bounce 1s infinite alternate; 
+        }
+        @keyframes bounce { from { transform: translateY(0); } to { transform: translateY(-10px); } }
 
-        /* 뽑기 연출 모달 */
+        .nickname { font-size: 24px; text-shadow: 2px 2px 4px black; color: #ecf0f1; margin-bottom: 5px; }
+        
+        .msg-box { 
+            position: absolute; top: 45%; left: 50%; transform: translate(-50%, -50%); 
+            background: rgba(0,0,0,0.85); padding: 15px 40px; border-radius: 50px; border: 2px solid #f1c40f;
+            pointer-events: none; z-index: 50; font-size: 24px; color: #f1c40f; box-shadow: 0 5px 15px black;
+        }
+
+        /* 시작 버튼 스타일 */
+        .game-btn {
+            background: linear-gradient(to bottom, #e74c3c, #c0392b);
+            border: none; border-radius: 15px; color: white; padding: 15px 50px;
+            font-size: 24px; font-family: 'Jua', sans-serif; cursor: pointer;
+            box-shadow: 0 5px 0 #922b21, 0 10px 10px rgba(0,0,0,0.3);
+            transition: 0.1s;
+        }
+        .game-btn:active { transform: translateY(5px); box-shadow: 0 0 0 #922b21; }
+        .game-btn:disabled { background: #7f8c8d; box-shadow: none; cursor: not-allowed; }
+
+        input { padding: 15px; font-size: 20px; border-radius: 10px; border: none; text-align: center; font-family: 'Jua'; width: 200px; }
+
+        /* 연출 오버레이 */
         #draw-overlay {
             position: fixed; top: 0; left: 0; width: 100%; height: 100%;
-            background: rgba(0,0,0,0.85); z-index: 500; display: none;
+            background: rgba(0,0,0,0.9); z-index: 500; display: none;
             flex-direction: column; justify-content: center; align-items: center; cursor: pointer;
+            backdrop-filter: blur(5px);
         }
         #drawn-card-display {
-            width: 200px; height: 300px; font-size: 90px; margin: 0; margin-left: 0; /* 기존 카드 스타일 덮어쓰기 */
-            transform: scale(0.5); opacity: 0; transition: 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+            width: 240px; height: 360px; font-size: 100px; margin: 0; margin-left: 0;
+            transform: scale(0.2) rotate(-20deg); opacity: 0; 
+            transition: 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+            box-shadow: 0 0 50px white;
         }
-        #draw-overlay.show #drawn-card-display { transform: scale(1); opacity: 1; }
-        #draw-text { margin-top: 30px; font-size: 30px; opacity: 0; transition: 0.3s; }
+        #draw-overlay.show #drawn-card-display { transform: scale(1) rotate(0deg); opacity: 1; }
+        #draw-text { margin-top: 40px; font-size: 40px; opacity: 0; transition: 0.3s; text-shadow: 0 0 10px white; }
         #draw-overlay.show #draw-text { opacity: 1; }
-        #skip-hint { margin-top: 50px; font-size: 16px; color: #aaa; opacity: 0.7; }
 
     </style>
 </head>
 <body>
 
+    <audio id="bgm" loop>
+        <source src="https://raw.githubusercontent.com/tictactoe-toy/toy-assets/master/music/Kevin_MacLeod_-_Pixelland.mp3" type="audio/mp3">
+    </audio>
+
     <div id="screen-login" class="screen active">
-        <h1 style="font-size: 60px;">🤡 도둑잡기</h1>
-        <input type="text" id="nickname" placeholder="닉네임 입력" style="padding:15px; font-size: 18px; text-align: center;">
-        <button onclick="joinGame()" style="padding:15px 40px; margin-top:20px; font-size: 18px; cursor:pointer;">게임 시작</button>
-        <p id="wait-msg" style="margin-top:20px; font-size: 18px; display:none;">대기 중... (<span id="count">0</span>/4)</p>
+        <h1 style="font-size: 80px; text-shadow: 0 0 20px #f1c40f; margin-bottom: 20px;">🃏 조커 뽑기</h1>
+        <p style="font-size: 20px; margin-bottom: 30px; color: #bdc3c7;">마지막까지 조커를 들고 있으면 패배합니다!</p>
+        <input type="text" id="nickname" placeholder="닉네임 입력">
+        <br><br>
+        <button onclick="joinGame()" class="game-btn">입장하기</button>
+        <p id="wait-msg" style="margin-top:20px; font-size: 20px; display:none; color: #f1c40f;">
+            대기 중... (<span id="count">0</span>/4)<br>
+            <span style="font-size:14px; color:#aaa;">(4명이 모이면 자동으로 시작됩니다)</span>
+        </p>
     </div>
 
     <div id="screen-game" class="screen">
@@ -105,14 +155,14 @@
     <div id="draw-overlay" onclick="finishAnimation()">
         <div id="drawn-card-display" class="card">?</div>
         <div id="draw-text">카드 획득!</div>
-        <div id="skip-hint">(클릭하면 넘어갑니다)</div>
+        <div id="skip-hint" style="margin-top: 20px; color: #aaa; font-size: 16px;">(화면을 클릭하면 넘어갑니다)</div>
     </div>
 
     <div id="screen-end" class="screen">
-        <h1 style="font-size: 80px; color: #e74c3c;">🤡 게임 종료 🤡</h1>
-        <h2 id="loser-name" style="color: #f1c40f; font-size: 40px;"></h2>
-        <p style="font-size: 20px;">이 플레이어가 조커를 가지고 있었습니다.</p>
-        <button onclick="location.reload()" style="padding:15px 40px; margin-top: 30px; font-size: 20px; cursor:pointer;">다시 하기</button>
+        <h1 style="font-size: 80px; color: #e74c3c; text-shadow: 0 0 20px black;">🤡 게임 종료 🤡</h1>
+        <h2 id="loser-name" style="color: #f1c40f; font-size: 50px;"></h2>
+        <p style="font-size: 24px; margin-top: 10px;">이 플레이어가 마지막까지 조커를 가지고 있었습니다.</p>
+        <button onclick="location.reload()" class="game-btn" style="margin-top: 40px;">다시 하기</button>
     </div>
 
     <script>
@@ -123,19 +173,41 @@
         let isMyTurn = false;
         let currentTargetIdx = -1;
         
-        // 애니메이션 변수
         let isAnimating = false; 
         let pendingState = null; 
         let animTimeout = null;
         let currentDrawnCard = null;
         let drawnIsPair = false;
+        let hasEscaped = false; // 탈출 여부 체크
+
+        // 음성 합성 (TTS) 설정
+        function speak(text) {
+            if (!window.speechSynthesis) return;
+            const utter = new SpeechSynthesisUtterance(text);
+            utter.lang = 'ko-KR';
+            utter.rate = 1.1; // 약간 빠르게
+            // 여자 목소리 찾기 노력
+            const voices = window.speechSynthesis.getVoices();
+            const femaleVoice = voices.find(v => v.name.includes('Google') || v.name.includes('Yuna') || v.name.includes('Female'));
+            if (femaleVoice) utter.voice = femaleVoice;
+            window.speechSynthesis.speak(utter);
+        }
+
+        // BGM 재생
+        function playBGM() {
+            const bgm = document.getElementById('bgm');
+            bgm.volume = 0.3;
+            bgm.play().catch(e => console.log("BGM 재생 실패(사용자 인터랙션 필요)"));
+        }
 
         function joinGame() {
             const nick = document.getElementById('nickname').value || '익명';
             socket.emit('join_game', nick);
             document.getElementById('wait-msg').style.display = 'block';
             document.querySelector('button').disabled = true;
+            playBGM(); // 버튼 클릭 시 BGM 시작
         }
+        
         socket.on('waiting_status', (count) => document.getElementById('count').innerText = count);
 
         socket.on('game_start', (data) => {
@@ -145,6 +217,7 @@
             document.getElementById('screen-login').classList.remove('active');
             document.getElementById('screen-game').classList.add('active');
             setNames();
+            speak("게임을 시작합니다. 짝이 맞는 카드는 버려집니다.");
         });
 
         socket.on('timer_reset', (data) => {
@@ -159,13 +232,13 @@
 
         socket.on('state_update', (data) => {
             if(isAnimating) {
-                pendingState = data; // 연출 중이면 데이터 저장해둠
+                pendingState = data;
                 return;
             }
             renderGameState(data);
         });
 
-        // [연출] 카드 뽑기
+        // 카드 뽑기 연출
         socket.on('card_drawn_animate', (data) => {
             isAnimating = true;
             currentDrawnCard = data.card;
@@ -178,24 +251,25 @@
             cardDisp.innerText = data.card.replace(/[♠♥♦♣]/, ''); 
             cardDisp.innerText = data.card;
             
-            cardDisp.className = 'card'; // 클래스 초기화
+            cardDisp.className = 'card';
             if(data.card.includes('♥') || data.card.includes('♦')) cardDisp.classList.add('red');
             else if(data.card.includes('♠') || data.card.includes('♣')) cardDisp.classList.add('black');
             else if(data.card.includes('JOKER')) cardDisp.classList.add('joker');
 
             if(drawnIsPair) {
-                drawText.innerText = "짝을 맞췄습니다! (버림)";
-                drawText.style.color = "#ffcccc";
+                drawText.innerText = "나이스! 짝을 맞췄어요!";
+                drawText.style.color = "#f1948a"; // 연한 빨강
+                speak("나이스! 짝을 맞췄어요.");
             } else {
-                drawText.innerText = "카드를 가져옵니다.";
+                drawText.innerText = "카드를 가져왔습니다.";
                 drawText.style.color = "white";
+                // speak("카드를 가져왔습니다."); // 너무 시끄러울 수 있어서 생략
             }
             
             overlay.style.display = 'flex';
             setTimeout(() => overlay.classList.add('show'), 10);
 
-            // 1.5초 후 자동 닫힘 (클릭 시 더 빨리 닫힘)
-            animTimeout = setTimeout(finishAnimation, 1500);
+            animTimeout = setTimeout(finishAnimation, 1500); // 1.5초 후 자동 닫힘
         });
 
         function finishAnimation() {
@@ -208,18 +282,15 @@
 
             isAnimating = false;
 
-            // [연출] 뽑은 게 짝이면, 내 패에서 해당 카드 터지는 효과
             if(drawnIsPair && currentDrawnCard) {
                 triggerDiscardEffect(currentDrawnCard);
             }
 
-            // 밀린 업데이트 반영
             if(pendingState) {
-                // 터지는 효과 볼 시간(0.6초) 주고 갱신
                 setTimeout(() => {
                     renderGameState(pendingState);
                     pendingState = null;
-                }, drawnIsPair ? 600 : 0);
+                }, drawnIsPair ? 800 : 0);
             }
         }
 
@@ -246,19 +317,30 @@
             document.getElementById('screen-game').style.display = 'none';
             document.getElementById('screen-end').classList.add('active');
             document.getElementById('loser-name').innerText = data.loser;
+            
+            if (data.loser === playerNames[myIndex]) {
+                speak("아쉽게도 패배했습니다. 조커를 가지고 계시네요.");
+            } else {
+                speak("게임 종료! " + data.loser + "님이 패배했습니다.");
+            }
         });
 
         function renderGameState(data) {
             isMyTurn = (data.turnIndex === myIndex);
             
-            if(isMyTurn) document.getElementById('status-msg').innerText = "당신 차례입니다! (15초)";
-            else document.getElementById('status-msg').innerText = `${playerNames[data.turnIndex]}님의 차례...`;
+            if(isMyTurn) {
+                document.getElementById('status-msg').innerText = "내 차례입니다! (10초)";
+                document.getElementById('status-msg').style.color = "#f1c40f";
+                speak("내 차례입니다.");
+            } else {
+                document.getElementById('status-msg').innerText = `${playerNames[data.turnIndex]}님의 차례...`;
+                document.getElementById('status-msg').style.color = "white";
+            }
 
             resetHighlights();
             highlightPlayer(data.turnIndex, 'turn-active');
 
             currentTargetIdx = -1;
-            // 타겟 찾기 로직: 내 오른쪽부터 카드 있는 사람 찾기
             if(isMyTurn && data.playerCounts[myIndex] > 0) {
                 let tempIdx = (myIndex + 1) % 4;
                 while(data.playerCounts[tempIdx] === 0 && tempIdx !== myIndex) {
@@ -273,19 +355,25 @@
             // 내 패 그리기
             const myHandDiv = document.getElementById('hand-me');
             myHandDiv.innerHTML = '';
-            if(data.myHand.length === 0) myHandDiv.innerHTML = '<span style="color:#aaa; font-size:24px; font-weight:bold;">🎉 탈출 성공!</span>';
             
-            data.myHand.forEach(card => {
-                const div = document.createElement('div');
-                div.innerText = card;
-                div.className = 'card';
-                if(card.includes('♥') || card.includes('♦')) div.classList.add('red');
-                else if(card.includes('♠') || card.includes('♣')) div.classList.add('black');
-                else if(card.includes('JOKER')) div.classList.add('joker');
-                myHandDiv.appendChild(div);
-            });
+            if(data.myHand.length === 0) {
+                myHandDiv.innerHTML = '<span style="color:#f1c40f; font-size:30px; font-weight:bold; text-shadow:0 0 10px black;">🎉 탈출 성공!</span>';
+                if (!hasEscaped) {
+                    hasEscaped = true;
+                    speak("축하합니다! 탈출에 성공하셨습니다!");
+                }
+            } else {
+                data.myHand.forEach(card => {
+                    const div = document.createElement('div');
+                    div.innerText = card;
+                    div.className = 'card';
+                    if(card.includes('♥') || card.includes('♦')) div.classList.add('red');
+                    else if(card.includes('♠') || card.includes('♣')) div.classList.add('black');
+                    else if(card.includes('JOKER')) div.classList.add('joker');
+                    myHandDiv.appendChild(div);
+                });
+            }
 
-            // 상대 패 그리기 (뒷면)
             [1, 2, 3].forEach(offset => {
                 const idx = (myIndex + offset) % 4;
                 renderOpponentHand(idx, data.playerCounts[idx], (isMyTurn && currentTargetIdx === idx));
@@ -321,7 +409,7 @@
             
             container.innerHTML = '';
             if(count === 0) {
-                container.innerHTML = '<span style="color:#ddd; font-weight:bold; font-size:20px;">🎉 탈출!</span>';
+                container.innerHTML = '<span style="color:#aaa; font-weight:bold; font-size:20px;">탈출!</span>';
                 return;
             }
             for(let i=0; i<count; i++) {
