@@ -4,63 +4,72 @@ const http = require('http').createServer(app);
 const io = require('socket.io')(http);
 const path = require('path');
 
-app.use(express.static(path.join(__dirname, '/')));
+// 현재 폴더의 모든 파일(이미지, html 등)을 클라이언트에 제공
+app.use(express.static(__dirname));
 
 app.get('/', (req, res) => {
     res.sendFile(__dirname + '/index.html');
 });
 
+// 대기 중인 플레이어 (매칭용)
 let waitingPlayer = null;
 
 io.on('connection', (socket) => {
-    console.log('A user connected:', socket.id);
+    console.log('User connected:', socket.id);
 
+    // 게임 참여 요청
     socket.on('join_game', (data) => {
-        // 대기 중인 플레이어가 있으면 매칭 시작
         if (waitingPlayer) {
-            // 방 생성
+            // 매칭 성사 -> 방 생성
             const roomName = waitingPlayer.id + "#" + socket.id;
             socket.join(roomName);
             waitingPlayer.join(roomName);
 
-            // 두 플레이어에게 게임 시작 알림 (p1, p2 역할 지정)
-            io.to(waitingPlayer.id).emit('game_start', { role: 'p1', room: roomName, opponentJob: data.job });
-            io.to(socket.id).emit('game_start', { role: 'p2', room: roomName, opponentJob: waitingPlayer.job });
+            // 두 명에게 게임 시작 신호
+            io.to(waitingPlayer.id).emit('game_start', { 
+                role: 'p1', 
+                room: roomName, 
+                opponentJob: data.job 
+            });
+            io.to(socket.id).emit('game_start', { 
+                role: 'p2', 
+                room: roomName, 
+                opponentJob: waitingPlayer.job 
+            });
 
-            waitingPlayer = null;
+            waitingPlayer = null; // 대기열 초기화
         } else {
-            // 대기열에 등록
+            // 대기열 등록
             waitingPlayer = socket;
-            waitingPlayer.job = data.job; // 직업 정보 저장
+            waitingPlayer.job = data.job;
             socket.emit('waiting');
         }
     });
 
-    // 위치 및 상태 동기화 (릴레이)
+    // 플레이어 움직임/상태 동기화
     socket.on('player_update', (data) => {
+        // 같은 방의 다른 사람에게만 전송 (broadcast)
         socket.broadcast.to(data.room).emit('opponent_update', data);
     });
 
-    // 공격 이벤트 릴레이
+    // 공격 이벤트 전달
     socket.on('attack_event', (data) => {
         socket.broadcast.to(data.room).emit('opponent_attack', data);
     });
 
-    // 아이템 획득 릴레이
-    socket.on('item_drop', (data) => {
-        io.to(data.room).emit('spawn_item', data);
-    });
-
+    // 연결 종료 처리
     socket.on('disconnect', () => {
         console.log('User disconnected');
         if (waitingPlayer === socket) {
             waitingPlayer = null;
         }
-        // 상대방에게 나갔음을 알림 (간단히 구현)
+        // 상대방에게 나갔음을 알림
         socket.broadcast.emit('opponent_left');
     });
 });
 
-http.listen(3000, () => {
-    console.log('Server running on http://localhost:3000');
+// Render에서는 process.env.PORT를 사용해야 함 (없으면 3000)
+const PORT = process.env.PORT || 3000;
+http.listen(PORT, () => {
+    console.log(`Server running on port ${PORT}`);
 });
