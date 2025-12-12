@@ -2,479 +2,189 @@
 <html lang="ko">
 <head>
     <meta charset="UTF-8">
-    <title>Survival Game Final</title>
+    <title>Rock Paper Scissors Online</title>
     <script src="/socket.io/socket.io.js"></script>
     <style>
-        body { margin: 0; overflow: hidden; background-color: #1a1a1a; color: white; font-family: sans-serif; user-select: none; }
-        canvas { display: block; }
-
-        /* UI 레이어 */
-        #ui-layer { position: absolute; top: 20px; left: 20px; pointer-events: none; z-index: 10; display: none; }
-        .stat-box { margin-bottom: 5px; background: rgba(0,0,0,0.5); padding: 5px 10px; border-radius: 4px; font-weight: bold; }
+        body { 
+            background-color: #2c3e50; color: white; font-family: 'Arial', sans-serif;
+            display: flex; flex-direction: column; align-items: center; justify-content: center;
+            height: 100vh; margin: 0; user-select: none;
+        }
+        h1 { margin-bottom: 20px; font-size: 3rem; text-shadow: 2px 2px 4px rgba(0,0,0,0.5); }
         
-        /* 버프 */
-        #buff-layer { position: absolute; top: 120px; left: 20px; pointer-events: none; z-index: 10; }
-        .buff-icon { background: rgba(0,0,0,0.6); color: #ffd700; padding: 5px 10px; border-radius: 5px; font-size: 14px; display: none; border: 1px solid #ffd700; margin-bottom: 5px; }
+        /* 화면 전환용 */
+        .screen { display: none; flex-direction: column; align-items: center; width: 100%; }
+        .active { display: flex; }
 
-        /* 스킬바 */
-        #skill-bar { position: absolute; bottom: 30px; left: 50%; transform: translateX(-50%); display: none; gap: 15px; z-index: 20; }
-        .skill-slot { width: 60px; height: 60px; background: #222; border: 2px solid #555; border-radius: 8px; position: relative; display: flex; flex-direction: column; align-items: center; justify-content: center; color: white; }
-        .skill-cooldown { position: absolute; bottom: 0; left: 0; width: 100%; height: 0%; background: rgba(0,0,0,0.8); transition: height 0.1s linear; }
+        /* 버튼 스타일 */
+        .btn {
+            background: #e74c3c; color: white; border: none; padding: 15px 40px;
+            font-size: 1.5rem; border-radius: 50px; cursor: pointer;
+            transition: transform 0.2s; box-shadow: 0 5px 15px rgba(0,0,0,0.3);
+        }
+        .btn:hover { transform: scale(1.05); background: #c0392b; }
 
-        /* 시작 화면 */
-        #start-screen { position: absolute; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.95); z-index: 200; display: flex; flex-direction: column; justify-content: center; align-items: center; }
-        .mode-btn { margin: 10px; padding: 15px 30px; font-size: 20px; cursor: pointer; background: #444; color: white; border: 2px solid #00ffcc; border-radius: 10px; }
-        .class-container { display: flex; gap: 20px; margin-top: 30px; }
-        .class-card { background: #222; border: 2px solid #555; width: 180px; padding: 20px; border-radius: 10px; text-align: center; cursor: pointer; transition: 0.2s; }
-        .class-card:hover { transform: scale(1.05); background: #333; }
-        .class-card.selected { border-color: #ffd700; background: #442200; }
-        .hidden { display: none !important; }
+        /* 카드 스타일 */
+        .cards-container { display: flex; gap: 20px; margin-top: 30px; }
+        .card {
+            background: white; border-radius: 15px; width: 120px; height: 160px;
+            display: flex; flex-direction: column; justify-content: center; align-items: center;
+            cursor: pointer; transition: 0.3s; border: 5px solid transparent; color: #333;
+        }
+        .card:hover { transform: translateY(-10px); border-color: #f1c40f; }
+        .card.selected { background: #f1c40f; border-color: #fff; transform: scale(1.1); }
+        .card.disabled { opacity: 0.5; pointer-events: none; }
+        
+        .emoji { font-size: 4rem; }
+        .label { font-size: 1.2rem; font-weight: bold; margin-top: 10px; }
 
-        /* 대기 및 종료 화면 */
-        #wait-screen, #game-over { display: none; position: absolute; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.9); z-index: 300; justify-content: center; align-items: center; flex-direction: column; }
+        /* 타이머 바 */
+        #timer-box { width: 300px; height: 20px; background: #555; border-radius: 10px; margin-top: 20px; overflow: hidden; }
+        #timer-bar { width: 100%; height: 100%; background: #2ecc71; transition: width 1s linear; }
+
+        /* 결과 화면 */
+        #result-msg { font-size: 3rem; font-weight: bold; margin: 20px; }
+        .win { color: #2ecc71; }
+        .lose { color: #e74c3c; }
+        .draw { color: #f1c40f; }
+        
+        #opponent-choice { font-size: 5rem; margin: 20px; }
     </style>
 </head>
 <body>
 
-    <audio id="bgm" loop>
-        <source src="https://raw.githubusercontent.com/tictactoe-toy/toy-assets/master/music/8bit-music-loop.mp3" type="audio/mp3">
-    </audio>
-
-    <div id="ui-layer">
-        <div class="stat-box">MODE: <span id="ui-mode">-</span></div>
-        <div class="stat-box">HP: <span id="ui-hp" style="color:#ff5555;">100</span></div>
-        <div class="stat-box" id="score-box">SCORE: <span id="ui-score">0</span></div>
+    <div id="screen-start" class="screen active">
+        <h1>가위 바위 보</h1>
+        <button class="btn" onclick="joinGame()">게임 찾기</button>
     </div>
 
-    <div id="buff-layer">
-        <div id="buff-exp" class="buff-icon">⚡ EXP x2 (<span id="buff-exp-time">0</span>s)</div>
+    <div id="screen-wait" class="screen">
+        <h1>매칭 중...</h1>
+        <p>상대방이 접속할 때까지 잠시만 기다려주세요.</p>
+        <div class="emoji">⏳</div>
     </div>
 
-    <div id="skill-bar">
-        <div class="skill-slot">J<div class="skill-cooldown" id="cd-j"></div></div>
-        <div class="skill-slot">K<div class="skill-cooldown" id="cd-k"></div></div>
-        <div class="skill-slot">L<div class="skill-cooldown" id="cd-l"></div></div>
-    </div>
+    <div id="screen-game" class="screen">
+        <h2 id="status-text">카드를 선택하세요!</h2>
+        
+        <div id="timer-box"><div id="timer-bar"></div></div>
+        <p id="time-text">남은 시간: 10초</p>
 
-    <div id="start-screen">
-        <h1 style="color:#ffd700;">SURVIVAL ARENA</h1>
-        <div id="mode-selection">
-            <button class="mode-btn" onclick="selectMode('single')">싱글 플레이</button>
-            <button class="mode-btn" onclick="selectMode('multi')">멀티 플레이 (PvP)</button>
-        </div>
-        <div id="class-selection" class="hidden">
-            <h2>직업 선택</h2>
-            <div class="class-container">
-                <div class="class-card" onclick="selectJob('knight')"><h3>기사</h3><p>근접 밸런스</p></div>
-                <div class="class-card" onclick="selectJob('shooter')"><h3>슈터</h3><p>원거리 견제</p></div>
-                <div class="class-card" onclick="selectJob('mage')"><h3>마법사</h3><p>범위 폭딜</p></div>
+        <div class="cards-container" id="cards">
+            <div class="card" onclick="selectCard('scissors')">
+                <div class="emoji">✌️</div>
+                <div class="label">가위</div>
             </div>
-            <button class="mode-btn" onclick="confirmStart()" style="margin-top:20px;">게임 시작</button>
+            <div class="card" onclick="selectCard('rock')">
+                <div class="emoji">✊</div>
+                <div class="label">바위</div>
+            </div>
+            <div class="card" onclick="selectCard('paper')">
+                <div class="emoji">✋</div>
+                <div class="label">보</div>
+            </div>
         </div>
     </div>
 
-    <div id="wait-screen"><h1 style="color:white;">접속 대기 중...</h1></div>
-    <div id="game-over"><h1 style="color:red;">GAME OVER</h1><button class="mode-btn" onclick="location.reload()">다시 하기</button></div>
-
-    <canvas id="gameCanvas"></canvas>
+    <div id="screen-result" class="screen">
+        <h1 id="result-title">결과</h1>
+        <p>상대방의 선택:</p>
+        <div id="opponent-choice">❓</div>
+        <div id="result-msg"></div>
+        <button class="btn" onclick="location.reload()">다시 하기</button>
+    </div>
 
     <script>
-        // 전역 변수 선언
-        let canvas, ctx;
-        let socket;
-        let game = { mode: null, active: false, paused: false, room: null, role: null };
-        let keys = {};
-        
-        // 몹 이미지 컨테이너
-        const mobImages = {};
-        const MOB_TYPES = [
-            { id: 'mob1', hpMult: 1.0, speedMult: 1.0, type: 'melee', color: 'red' },
-            { id: 'mob2', hpMult: 0.6, speedMult: 1.4, type: 'melee', color: 'lime' },
-            { id: 'mob3', hpMult: 0.8, speedMult: 0.8, type: 'ranged', color: '#aa00ff'}
-        ];
+        const socket = io();
+        let currentRoom = null;
+        let myTimer = null;
+        let timeLeft = 10;
 
-        // 직업 데이터
-        const JOBS = {
-            knight: { hp: 200, speed: 3, color: '#00ffcc', damage: 20, cd: {j:3000, k:2000, l:10000} },
-            shooter: { hp: 120, speed: 4.5, color: '#ffcc00', damage: 15, cd: {j:4000, k:2000, l:8000} },
-            mage: { hp: 150, speed: 3.5, color: '#aa00ff', damage: 30, cd: {j:3000, k:4000, l:15000} }
-        };
-
-        let player = { x:0, y:0, hp:100, maxHp:100, job:'knight', facing:{x:1,y:0}, skillCD:{j:0,k:0,l:0}, skillMax:{j:0,k:0,l:0} };
-        // [중요] 상대방 보간(Interpolation)용 변수 targetX, targetY
-        let opponent = { active: false, x:0, y:0, targetX:0, targetY:0, hp:100, maxHp:100, job:'knight', facing:{x:1,y:0} };
-        
-        let enemies = [];
-        let projectiles = [];
-        let particles = [];
-        let selectedJob = null;
-        let lastTime = 0;
-        let updateTimer = 0;
-
-        // --- 오디오 시스템 ---
-        const AudioContext = window.AudioContext || window.webkitAudioContext;
-        let audioCtx;
-        function initAudio() {
-            if(!audioCtx) audioCtx = new AudioContext();
-            if(audioCtx.state === 'suspended') audioCtx.resume();
-            document.getElementById('bgm').volume = 0.2;
-            document.getElementById('bgm').play().catch(()=>{});
+        // 화면 전환 함수
+        function showScreen(id) {
+            document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+            document.getElementById(id).classList.add('active');
         }
-        function playSound(type) {
-            if(!audioCtx) return;
-            const osc = audioCtx.createOscillator();
-            const gain = audioCtx.createGain();
-            osc.connect(gain); gain.connect(audioCtx.destination);
-            const now = audioCtx.currentTime;
+
+        // 게임 찾기
+        function joinGame() {
+            showScreen('screen-wait');
+            socket.emit('join_game');
+        }
+
+        // 게임 시작 (서버에서 신호 옴)
+        socket.on('game_start', (data) => {
+            currentRoom = data.roomID;
+            showScreen('screen-game');
+            startTimer();
+        });
+
+        // 결과 수신
+        socket.on('game_result', (data) => {
+            clearInterval(myTimer); // 타이머 멈춤
+            showScreen('screen-result');
+
+            const resultTitle = document.getElementById('result-title');
+            const resultMsg = document.getElementById('result-msg');
+            const opChoice = document.getElementById('opponent-choice');
+
+            // 상대방 선택 표시
+            if(data.opponentMove === 'rock') opChoice.innerText = '✊';
+            else if(data.opponentMove === 'paper') opChoice.innerText = '✋';
+            else if(data.opponentMove === 'scissors') opChoice.innerText = '✌️';
+            else if(data.opponentMove === 'timeout') opChoice.innerText = '⏰'; // 상대 시간초과
+            else opChoice.innerText = '❓';
+
+            // 결과 메시지
+            if (data.result === 'win') {
+                resultMsg.innerText = "승리!";
+                resultMsg.className = 'win';
+            } else if (data.result === 'lose') {
+                resultMsg.innerText = data.msg || "패배...";
+                resultMsg.className = 'lose';
+            } else {
+                resultMsg.innerText = "무승부!";
+                resultMsg.className = 'draw';
+            }
+        });
+
+        // 카드 선택
+        function selectCard(choice) {
+            // 서버에 전송
+            socket.emit('make_move', { roomID: currentRoom, choice: choice });
+
+            // UI 업데이트 (선택 완료 상태)
+            document.getElementById('status-text').innerText = "상대방을 기다리는 중...";
             
-            if(type==='hit'){
-                osc.type='square'; osc.frequency.setValueAtTime(150,now);
-                gain.gain.setValueAtTime(0.1,now); gain.gain.linearRampToValueAtTime(0.01,now+0.1);
-                osc.start(now); osc.stop(now+0.1);
-            } else if(type==='shoot'){
-                osc.type='triangle'; osc.frequency.setValueAtTime(400,now); osc.frequency.linearRampToValueAtTime(100,now+0.1);
-                gain.gain.setValueAtTime(0.1,now); gain.gain.linearRampToValueAtTime(0.01,now+0.1);
-                osc.start(now); osc.stop(now+0.1);
-            }
-        }
-
-        // ==========================================
-        // [핵심] window.onload : HTML 로딩 후 실행
-        // ==========================================
-        window.onload = function() {
-            canvas = document.getElementById('gameCanvas');
-            if(!canvas) { alert("캔버스 에러!"); return; }
-            ctx = canvas.getContext('2d');
-            canvas.width = window.innerWidth;
-            canvas.height = window.innerHeight;
-
-            // 이미지 로드
-            ['mob1', 'mob2', 'mob3'].forEach(name => {
-                const img = new Image();
-                img.src = `./${name}.png`; // 같은 폴더에 있어야 함
-                mobImages[name] = img;
-            });
-
-            // 키 입력
-            window.addEventListener('keydown', e => { 
-                if(e.code==='Space') e.preventDefault(); 
-                keys[e.code] = true; 
-            });
-            window.addEventListener('keyup', e => { 
-                keys[e.code] = false; 
-                if(game.active && !game.paused) {
-                    if(e.code==='KeyJ') useSkill('j');
-                    if(e.code==='KeyK') useSkill('k');
-                    if(e.code==='KeyL') useSkill('l');
-                    if(e.code==='Space') basicAttack();
+            // 모든 카드 비활성화 및 선택 효과
+            const cards = document.querySelectorAll('.card');
+            cards.forEach(c => {
+                c.classList.add('disabled'); // 클릭 방지
+                if(c.onclick.toString().includes(choice)) {
+                    c.classList.add('selected'); // 선택된 카드 표시
                 }
             });
-        };
+        }
 
-        // --- 모드 선택 함수들 ---
-        window.selectMode = function(mode) {
-            game.mode = mode;
-            document.getElementById('mode-selection').classList.add('hidden');
-            document.getElementById('class-selection').classList.remove('hidden');
-        };
-        window.selectJob = function(job) {
-            selectedJob = job;
-            document.querySelectorAll('.class-card').forEach(el => el.classList.remove('selected'));
-            event.currentTarget.classList.add('selected');
-        };
-        window.confirmStart = function() {
-            if(!selectedJob) return alert("직업을 선택해주세요!");
-            initAudio();
+        // 클라이언트 측 타이머 (시각적 용도)
+        function startTimer() {
+            timeLeft = 10;
+            const timerBar = document.getElementById('timer-bar');
+            const timeText = document.getElementById('time-text');
             
-            const data = JOBS[selectedJob];
-            player.job = selectedJob;
-            player.hp = player.maxHp = data.hp;
-            player.speed = data.speed;
-            player.x = canvas.width/2; player.y = canvas.height/2;
-            player.skillMax = {...data.cd};
+            timerBar.style.width = '100%';
+            timeText.innerText = `남은 시간: ${timeLeft}초`;
 
-            if (game.mode === 'single') startSingleGame();
-            else connectMultiplayer();
-        };
+            myTimer = setInterval(() => {
+                timeLeft--;
+                timeText.innerText = `남은 시간: ${timeLeft}초`;
+                timerBar.style.width = `${(timeLeft / 10) * 100}%`;
 
-        function startSingleGame() {
-            document.getElementById('start-screen').style.display = 'none';
-            setupGameUI();
-            game.active = true;
-            lastTime = Date.now();
-            requestAnimationFrame(gameLoop);
-        }
-
-        function connectMultiplayer() {
-            document.getElementById('start-screen').classList.add('hidden');
-            document.getElementById('wait-screen').style.display = 'flex';
-
-            socket = io(); // 소켓 연결
-            socket.emit('join_game', { job: selectedJob });
-
-            socket.on('game_start', (data) => {
-                document.getElementById('wait-screen').style.display = 'none';
-                game.room = data.room;
-                game.role = data.role;
-                
-                const opData = JOBS[data.opponentJob];
-                opponent.active = true;
-                opponent.job = data.opponentJob;
-                opponent.hp = opponent.maxHp = opData.hp;
-                opponent.color = opData.color;
-                
-                if(game.role === 'p1') { player.x = 100; opponent.x = canvas.width - 100; }
-                else { player.x = canvas.width - 100; opponent.x = 100; }
-                
-                // 보간 초기값 설정
-                opponent.targetX = opponent.x; 
-                opponent.targetY = opponent.y;
-                player.y = opponent.y = canvas.height/2;
-
-                setupGameUI();
-                game.active = true;
-                lastTime = Date.now();
-                requestAnimationFrame(gameLoop);
-            });
-
-            // 상대방 위치 수신 (보간 목표 설정)
-            socket.on('opponent_update', (data) => {
-                if(!opponent.active) return;
-                opponent.targetX = data.x;
-                opponent.targetY = data.y;
-                opponent.hp = data.hp;
-                opponent.facing = data.facing;
-            });
-
-            // 상대방 공격 수신
-            socket.on('opponent_attack', (data) => {
-                if(data.type === 'basic') {
-                    // 상대가 쏜 총알 생성 (주인: enemy)
-                    createProjectile(data.x, data.y, data.angle, 'enemy', data.damage);
+                if (timeLeft <= 0) {
+                    clearInterval(myTimer);
                 }
-            });
-
-            socket.on('opponent_left', () => { alert("상대방이 나갔습니다. 승리!"); location.reload(); });
+            }, 1000);
         }
-
-        function setupGameUI() {
-            document.getElementById('ui-layer').style.display = 'block';
-            document.getElementById('skill-bar').style.display = 'flex';
-            document.getElementById('ui-mode').innerText = game.mode === 'single' ? "SINGLE" : "MULTI (PvP)";
-            if(game.mode === 'multi') document.getElementById('score-box').style.display = 'none';
-        }
-
-        // --- 메인 루프 ---
-        function gameLoop() {
-            if(!game.active) return;
-            const now = Date.now();
-            const dt = now - lastTime;
-            lastTime = now;
-
-            update(dt);
-            draw();
-
-            // 멀티플레이: 내 위치 전송 (30ms 마다)
-            if(game.mode === 'multi' && socket) {
-                updateTimer += dt;
-                if(updateTimer > 30) {
-                    socket.emit('player_update', {
-                        room: game.room, x: player.x, y: player.y, hp: player.hp, facing: player.facing
-                    });
-                    updateTimer = 0;
-                }
-            }
-            requestAnimationFrame(gameLoop);
-        }
-
-        function update(dt) {
-            // 1. 플레이어 이동
-            let mx=0, my=0;
-            if(keys['ArrowUp'] || keys['KeyW']) my-=1;
-            if(keys['ArrowDown'] || keys['KeyS']) my+=1;
-            if(keys['ArrowLeft'] || keys['KeyA']) mx-=1;
-            if(keys['ArrowRight'] || keys['KeyD']) mx+=1;
-            if(mx!==0 || my!==0) {
-                const len = Math.sqrt(mx*mx+my*my);
-                player.x += (mx/len) * player.speed;
-                player.y += (my/len) * player.speed;
-                player.facing = {x:mx/len, y:my/len};
-            }
-            // 맵 밖으로 안 나가게
-            player.x = Math.max(20, Math.min(canvas.width-20, player.x));
-            player.y = Math.max(20, Math.min(canvas.height-20, player.y));
-
-            // 2. 상대방 부드러운 이동 (보간)
-            if(game.mode === 'multi' && opponent.active) {
-                opponent.x += (opponent.targetX - opponent.x) * 0.1;
-                opponent.y += (opponent.targetY - opponent.y) * 0.1;
-            }
-
-            // 3. 쿨타임
-            for(let k in player.skillCD) {
-                if(player.skillCD[k] > 0) {
-                    player.skillCD[k] -= dt;
-                    document.getElementById(`cd-${k}`).style.height = (player.skillCD[k]/player.skillMax[k])*100 + '%';
-                }
-            }
-
-            // 4. 싱글플레이 적 생성
-            if(game.mode === 'single') {
-                if(Math.random() < 0.02) spawnEnemy();
-                enemies.forEach((e, i) => {
-                    const dx = player.x - e.x, dy = player.y - e.y;
-                    const dist = Math.hypot(dx, dy);
-                    e.x += (dx/dist)*e.speed; e.y += (dy/dist)*e.speed;
-                    if(dist < 20 + e.radius) {
-                        damagePlayer(5);
-                        enemies.splice(i, 1);
-                    }
-                });
-            }
-
-            // 5. 투사체 이동 및 충돌
-            for(let i=projectiles.length-1; i>=0; i--) {
-                const p = projectiles[i];
-                p.x += p.vx; p.y += p.vy;
-                p.life -= dt;
-                
-                let hit = false;
-                
-                // 싱글: 몹 충돌
-                if(game.mode === 'single') {
-                    for(let j=enemies.length-1; j>=0; j--) {
-                        const e = enemies[j];
-                        if(Math.hypot(p.x-e.x, p.y-e.y) < e.radius + p.radius) {
-                            enemies.splice(j, 1); hit = true; break;
-                        }
-                    }
-                } 
-                // 멀티: 플레이어 충돌
-                else if(game.mode === 'multi') {
-                    // 적이 쏜 총알에 내가 맞음
-                    if(p.owner === 'enemy') {
-                        if(Math.hypot(p.x-player.x, p.y-player.y) < 25) {
-                            damagePlayer(p.damage);
-                            hit = true;
-                        }
-                    }
-                }
-
-                if(hit || p.life <= 0) projectiles.splice(i, 1);
-            }
-
-            // 파티클
-            particles.forEach((p,i) => {
-                p.life -= dt; p.x += p.vx; p.y += p.vy;
-                if(p.life<=0) particles.splice(i,1);
-            });
-        }
-
-        function draw() {
-            ctx.fillStyle = '#1a1a1a'; ctx.fillRect(0,0,canvas.width,canvas.height);
-
-            // 싱글 몹 그리기
-            if(game.mode === 'single') {
-                enemies.forEach(e => {
-                    const img = mobImages[e.mobType.id];
-                    if(img && img.complete) {
-                        const size = e.radius * 2;
-                        ctx.drawImage(img, e.x-e.radius, e.y-e.radius, size, size);
-                    } else {
-                        ctx.fillStyle = e.mobType.color; ctx.beginPath(); ctx.arc(e.x,e.y,e.radius,0,7); ctx.fill();
-                    }
-                    ctx.fillStyle='lime'; ctx.fillRect(e.x-15, e.y-e.radius-10, 30, 4);
-                });
-            }
-
-            // 멀티 상대방
-            if(game.mode === 'multi' && opponent.active) {
-                ctx.fillStyle = opponent.color || 'red';
-                ctx.beginPath(); ctx.arc(opponent.x, opponent.y, 20, 0, 7); ctx.fill();
-                // 체력바
-                ctx.fillStyle = 'red'; ctx.fillRect(opponent.x-20, opponent.y-35, 40, 5);
-                ctx.fillStyle = 'lime'; ctx.fillRect(opponent.x-20, opponent.y-35, 40 * (opponent.hp/opponent.maxHp), 5);
-                ctx.fillStyle = 'white'; ctx.fillText("Enemy", opponent.x-15, opponent.y-40);
-            }
-
-            // 플레이어
-            ctx.fillStyle = JOBS[player.job].color;
-            ctx.beginPath(); ctx.arc(player.x, player.y, 20, 0, 7); ctx.fill();
-            ctx.fillStyle = 'black'; ctx.beginPath(); ctx.arc(player.x+player.facing.x*10, player.y+player.facing.y*10, 5, 0, 7); ctx.fill();
-
-            // 투사체
-            projectiles.forEach(p => { 
-                ctx.fillStyle=p.color; ctx.beginPath(); ctx.arc(p.x,p.y,p.radius,0,7); ctx.fill(); 
-                if(p.owner === 'enemy') { ctx.strokeStyle='red'; ctx.lineWidth=2; ctx.stroke(); }
-            });
-            
-            // 파티클
-            particles.forEach(p => { ctx.fillStyle=p.color; ctx.globalAlpha=p.life/500; ctx.beginPath(); ctx.arc(p.x,p.y,3,0,7); ctx.fill(); ctx.globalAlpha=1; });
-
-            document.getElementById('ui-hp').innerText = Math.floor(player.hp);
-        }
-
-        // --- 액션 함수 ---
-        function basicAttack() {
-            const angle = Math.atan2(player.facing.y, player.facing.x);
-            playSound('shoot');
-            // 내 화면에 생성
-            createProjectile(player.x, player.y, angle, 'me', JOBS[player.job].damage);
-            // 멀티면 전송
-            if(game.mode === 'multi') {
-                socket.emit('attack_event', { 
-                    room: game.room, type: 'basic', x: player.x, y: player.y, angle: angle, damage: JOBS[player.job].damage 
-                });
-            }
-        }
-
-        function createProjectile(x, y, angle, owner, damage) {
-            projectiles.push({
-                x:x, y:y, vx:Math.cos(angle)*10, vy:Math.sin(angle)*10,
-                life:1000, radius:5, color:'yellow', owner:owner, damage:damage || 10
-            });
-        }
-
-        function spawnEnemy() {
-            const typeData = MOB_TYPES[Math.floor(Math.random() * MOB_TYPES.length)];
-            enemies.push({ 
-                x: Math.random()*canvas.width, y: Math.random()*canvas.height, 
-                radius: 40, hp: 50, speed: 1.5, mobType: typeData 
-            });
-        }
-
-        function damagePlayer(amount) {
-            player.hp -= amount;
-            // 피격 이펙트
-            for(let i=0;i<5;i++) particles.push({x:player.x, y:player.y, vx:(Math.random()-0.5)*5, vy:(Math.random()-0.5)*5, life:500, color:'red'});
-            
-            playSound('hit');
-
-            // 멀티면 내 체력 정보 갱신 전송
-            if(game.mode === 'multi') {
-                socket.emit('player_update', {
-                    room: game.room, x: player.x, y: player.y, hp: player.hp, facing: player.facing
-                });
-            }
-
-            if(player.hp <= 0) {
-                game.active = false;
-                document.getElementById('game-over').style.display = 'flex';
-                if(game.mode === 'multi') socket.disconnect();
-            }
-        }
-        
-        function useSkill(k) {
-            if(player.skillCD[k] > 0) return;
-            player.skillCD[k] = player.skillMax[k];
-            // 스킬 구현은 단순화 (기본 공격 3방향 등)
-            playSound('shoot');
-            const angle = Math.atan2(player.facing.y, player.facing.x);
-            createProjectile(player.x, player.y, angle-0.3, 'me', 10);
-            createProjectile(player.x, player.y, angle, 'me', 10);
-            createProjectile(player.x, player.y, angle+0.3, 'me', 10);
-        }
-
     </script>
 </body>
 </html>

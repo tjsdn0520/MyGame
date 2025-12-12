@@ -1,7 +1,7 @@
 {
-  "name": "survival-game-multi",
+  "name": "rps-multiplayer",
   "version": "1.0.0",
-  "description": "Multiplayer Survival Game",
+  "description": "Rock Paper Scissors Multiplayer",
   "main": "server.js",
   "scripts": {
     "start": "node server.js"
